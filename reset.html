@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Şifre Sıfırlama</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+  <style>
+    video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+      opacity: 0.7;
+    }
+    .form-container {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+  <video id="backgroundVideo" muted loop playsinline>
+    <source src="arka.mp4" type="video/mp4">
+    Tarayıcınız video oynatmayı desteklemiyor.
+  </video>
+  <div class="form-container p-8 rounded-xl shadow-2xl w-full max-w-md">
+    <h1 class="text-3xl font-bold text-center mb-6 text-gray-800">Yeni Şifre</h1>
+    <form id="resetForm" class="space-y-4">
+      <input type="password" id="newPassword" placeholder="Yeni Şifre" required class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+      <button type="submit" class="w-full p-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center justify-center">
+        <span id="resetButtonText">Şifreyi Güncelle</span>
+        <svg id="resetSpinner" class="hidden animate-spin h-5 w-5 ml-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </button>
+    </form>
+    <p id="message" class="mt-4 text-center text-red-500"></p>
+  </div>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    document.getElementById('resetForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const newPassword = document.getElementById('newPassword').value;
+      const message = document.getElementById('message');
+      const buttonText = document.getElementById('resetButtonText');
+      const spinner = document.getElementById('resetSpinner');
+
+      if (newPassword.length < 6) {
+        message.textContent = 'Şifre en az 6 karakter olmalı.';
+        return;
+      }
+
+      buttonText.classList.add('hidden');
+      spinner.classList.remove('hidden');
+
+      try {
+        const response = await fetch('/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, newPassword })
+        });
+        const data = await response.json();
+        message.textContent = data.message;
+        if (response.ok) {
+          setTimeout(() => window.location.href = '/', 2000);
+          gtag('event', 'reset_password', {}); // Analytics
+        }
+      } catch (error) {
+        console.error('Şifre güncelleme frontend hatası:', error);
+        message.textContent = 'Bir hata oluştu.';
+      } finally {
+        buttonText.classList.remove('hidden');
+        spinner.classList.add('hidden');
+      }
+    });
+
+    // Lazy Loading için Intersection Observer
+    const video = document.getElementById('backgroundVideo');
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        video.play();
+      } else {
+        video.pause();
+      }
+    }, { threshold: 0.1 });
+    observer.observe(video);
+  </script>
+</body>
+</html>
