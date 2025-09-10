@@ -1,1 +1,0 @@
-Buraya 'aksa.jpg' görselinizi ekleyin (arka plan için).
