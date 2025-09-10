@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fotoğraf Galerisi</title>
+  <style>
+    body{background:#000;color:#fff;font-family:sans-serif;margin:0;padding:0;}
+    h1{text-align:center;color:#e63946;margin:2rem 0;}
+    .grid{display:grid;gap:1rem;padding:1rem;}
+    @media(min-width:768px){.grid{grid-template-columns:repeat(3,1fr);}}
+    .card{overflow:hidden;border-radius:0.5rem;box-shadow:0 0 10px rgba(0,0,0,0.5);}
+    img{width:100%;display:block;transition:0.3s;}
+    img:hover{transform:scale(1.05);}
+    a{display:block;text-align:center;margin:2rem;color:#e63946;text-decoration:none;}
+  </style>
+</head>
+<body>
+  <h1>Fotoğraf Galerisi</h1>
+  <div class="grid">
+    <div class="card"><img src="foto1.jpg" alt="Gazze 1"></div>
+    <div class="card"><img src="foto2.jpg" alt="Gazze 2"></div>
+    <div class="card"><img src="foto3.jpg" alt="Gazze 3"></div>
+  </div>
+  <a href="index.html">← Ana Sayfaya Dön</a>
+</body>
+</html>

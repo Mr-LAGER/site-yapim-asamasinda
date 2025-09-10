@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Filistin İçin Adalet</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background:#000;
+      color:#f1f1f1;
+      line-height:1.7;
+      scroll-behavior:smooth;
+    }
+    body::before {
+      content:"";
+      position:fixed;inset:0;
+      background:url('aksa.jpg') center/cover no-repeat;
+      opacity:0.18;z-index:-1;
+    }
+    h1,h2{font-weight:800;line-height:1.3;}
+    h1{font-size:3rem;color:#e63946;}
+    h2{font-size:2rem;margin:2rem 0 1rem;color:#ff4d5b;}
+    p{margin:0.5rem 0;font-size:1.05rem;}
+    .container{max-width:1100px;margin:auto;padding:2rem;}
+    .hero{text-align:center;padding:5rem 2rem;animation:fadeIn 2s ease-in;}
+    .btn{display:inline-block;margin:1rem;padding:0.75rem 1.5rem;border-radius:0.5rem;
+      background:#e63946;color:#fff;font-weight:bold;transition:0.3s;}
+    .btn:hover{background:#ff4d5b;transform:scale(1.05);}
+    .grid{display:grid;gap:1.5rem;}
+    @media(min-width:768px){.grid-3{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:repeat(2,1fr);}}
+    .card{background:rgba(255,255,255,0.05);padding:1.5rem;border-radius:1rem;
+      border-left:4px solid #e63946;backdrop-filter:blur(6px);}
+    .number{font-size:2rem;font-weight:800;color:#e63946;}
+    footer{text-align:center;padding:2rem;margin-top:3rem;border-top:1px solid rgba(255,255,255,0.1);color:#aaa;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  </style>
+</head>
+<body>
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Filistin İçin Adalet</h1>
+    <p>
+      Sessizlik, zulmün en büyük silahıdır.  
+      Bugün senin sesin, Filistin’in nefesi olabilir.  
+      Gerçekleri gör, zulmü duy ve adalet için ayağa kalk.
+    </p>
+    <a href="#gercekler" class="btn">Gerçekleri Gör</a>
+  </section>
+
+  <div class="container">
+    <!-- Gerçekler -->
+    <section id="gercekler">
+      <h2>Gerçekler</h2>
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="number" id="sehit">0</div>
+          <p>Hayatını kaybeden Filistinliler.</p>
+        </div>
+        <div class="card">
+          <div class="number" id="cocuk">0</div>
+          <p>Katledilen masum çocuklar.</p>
+        </div>
+        <div class="card">
+          <div class="number" id="bina">0</div>
+          <p>Yıkılan okul ve hastane.</p>
+        </div>
+      </div>
+      <div style="margin-top:2rem;">
+        <p>
+          Filistin’de yaşanan soykırım onlarca yıldır sürüyor.  
+          Çocuklar oyun oynayacağı yaşta bombaların gölgesinde büyüyor, anneler evlatsız bırakılıyor.  
+          Bu sadece bir toprak kavgası değil; umutların, yarınların ve insanlığın gaspıdır.  
+          Sessizliğimiz zalimi güçlendirir. Dayanışmamız ise mazlumu ayağa kaldırır.
+        </p>
+      </div>
+    </section>
+
+    <!-- Ne Kadar Zamandır Sürüyor -->
+    <section id="sure">
+      <h2>Ne Kadar Zamandır Sürüyor?</h2>
+      <div class="card">
+        <div class="number" id="yil">0</div>
+        <p>Yıldır Filistin halkı özgürlük mücadelesi veriyor.</p>
+      </div>
+    </section>
+
+    <!-- Günlük Kayıplar -->
+    <section id="gunluk">
+      <h2>Günlük Kayıplar</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="number" id="gunlukCocuk">0</div>
+          <p>Her gün yaşam hakkı elinden alınan çocuk.</p>
+        </div>
+        <div class="card">
+          <div class="number" id="gunlukBina">0</div>
+          <p>Her gün yıkılan ev ve bina.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Neden Destek Olmalıyız -->
+    <section id="neden">
+      <h2>Neden Destek Olmalıyız?</h2>
+      <p>
+        Çünkü zulme sessiz kalmak, zulmü onaylamaktır.  
+        Çünkü her çocuk eşit yaşam hakkına sahiptir.  
+        Çünkü adalet sadece güçlülerin değil, mazlumların da hakkıdır.  
+        Ve biz sustuğumuzda, onların çığlığı gökyüzünde yankılanmaya devam eder.
+      </p>
+    </section>
+
+    <!-- Nasıl Yardım Edebiliriz -->
+    <section id="yardim">
+      <h2>Nasıl Yardım Edebiliriz?</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <p><strong>Boykot</strong><br>İsrail destekçisi markalara harcama yapma.</p>
+        </div>
+        <div class="card">
+          <p><strong>Bağış</strong><br>Filistin’deki insani yardım kuruluşlarını destekle.</p>
+        </div>
+        <div class="card">
+          <p><strong>Bilinçlendirme</strong><br>Gerçekleri çevrendekilerle paylaş.</p>
+        </div>
+        <div class="card">
+          <p><strong>Sosyal Medya</strong><br>Hikâyeleri ve haberleri yayarak görünür kıl.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dayanışma Çağrısı -->
+    <section id="cagri">
+      <h2>Dayanışma Çağrısı</h2>
+      <p>
+        Filistin’in özgürlüğü için verilen mücadele, insanlığın vicdan mücadelesidir.  
+        Bizim sessizliğimiz işgale güç, sesimizse özgürlüğe umut verir.  
+        Bugün dayanışma gösterirsek, yarın çocukların gülüşüyle ödüllendiriliriz.
+      </p>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <a href="kaynakca.html" class="btn"> Kaynakça</a>
+    <a href="boykot.html" class="btn"> Boykotun Gücü</a>
+    <p style="margin-top:1rem;">© 2025 Filistin İçin Adalet — Sessiz kalma, adalet için sesini yükselt.</p>
+  </footer>
+
+  <!-- Sayaç Script -->
+  <script>
+    function sayac(id, hedef, hiz){
+      let sayi=0;
+      const span=document.getElementById(id);
+      const artim=Math.ceil(hedef/100);
+      const interval=setInterval(()=>{
+        sayi+=artim;
+        if(sayi>=hedef){
+          sayi=hedef;
+          clearInterval(interval);
+          span.textContent=sayi.toLocaleString() + "+";
+        } else {
+          span.textContent=sayi.toLocaleString();
+        }
+      },hiz);
+    }
+    window.onload=()=>{
+      sayac("sehit",64000,10);
+      sayac("cocuk",18500,15);
+      sayac("bina",100,20);
+      sayac("yil",75,50); // 75 yıldır sürüyor
+      sayac("gunlukCocuk",10,80); // her gün 10 çocuk
+      sayac("gunlukBina",5,100); // her gün 5 bina
+    };
+  </script>
+</body>
+</html>
