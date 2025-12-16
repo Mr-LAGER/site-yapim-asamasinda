@@ -181,14 +181,10 @@ function sayac(id, hedef, hiz){
     if(s >= hedef){
       el.textContent = hedef.toLocaleString() + "+";
       clearInterval(iv);
-    }else{
+    } else {
       el.textContent = s.toLocaleString();
     }
   }, hiz);
-}
-
-function formatDate(d){
-  return d.toISOString().split("T")[0];
 }
 
 async function verileriYukle(){
@@ -198,47 +194,47 @@ async function verileriYukle(){
     );
     const data = await res.json();
 
-    // En son raporlanan günü bul
-    let gunVerisi = null;
-    let tarih = new Date();
+    if(!Array.isArray(data) || data.length === 0)
+      throw "Veri yok";
 
-    for(let i=0;i<5;i++){
-      const t = formatDate(tarih);
-      gunVerisi = data.find(x => x.report_date === t);
-      if(gunVerisi) break;
-      tarih.setDate(tarih.getDate() - 1);
-    }
+    // 📅 İlk ve son tarih
+    const ilkGun = new Date(data[0].report_date);
+    const sonGun = new Date(data[data.length - 1].report_date);
 
-    if(!gunVerisi) throw "Veri bulunamadı";
+    const gunFarki = Math.floor(
+      (sonGun - ilkGun) / (1000 * 60 * 60 * 24)
+    ) + 1;
 
-    // 🔴 TOPLAM KAYIPLAR
+    document.getElementById("yil").textContent =
+      gunFarki.toLocaleString() + " gündür";
+
+    // 🔴 En güncel veri
+    const gunVerisi = data[data.length - 1];
+
+    // 📊 TOPLAM (CUMULATIVE) SAYILAR
     sayac("sehit", gunVerisi.killed_cum, 10);
-    sayac("cocuk", gunVerisi.killed_children_cum, 14);
-    sayac("saglik", gunVerisi.med_killed_cum, 18);
-    sayac("gazeteci", gunVerisi.press_killed_cum, 22);
+    sayac("cocuk", gunVerisi.ext_killed_children_cum, 14);
+    sayac("saglik", gunVerisi.ext_med_killed_cum, 18);
+    sayac("gazeteci", gunVerisi.ext_press_killed_cum, 22);
     sayac("yarali", gunVerisi.injured_cum, 16);
 
-    // 🕒 Son güncelleme tarihi
+    // 🕒 Son güncelleme
     document.getElementById("sonGuncelleme").textContent =
       "(Son güncelleme: " + gunVerisi.report_date + ")";
 
-    // ⏳ Süre
-    const baslangic = new Date("2023-10-07T00:00:00Z");
-    const gun = Math.floor((new Date() - baslangic)/(1000*60*60*24)) + 1;
-    document.getElementById("yil").textContent =
-      gun.toLocaleString() + " gündür";
-
   }catch(err){
-    console.error("Veri alınamadı:", err);
+    console.error("Veri çekilemedi:", err);
   }
 }
 
 window.addEventListener("load", ()=>{
-  verileriYukle();
-  setInterval(verileriYukle, 3600000); // saatte 1
+  verileriYukle();                 // sayfa açılınca
+  setInterval(verileriYukle, 3600000); // ⏱ saatte 1
 });
 </script>
+
 </body>
 </html>
+
 
 
