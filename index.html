@@ -29,15 +29,15 @@
       background:#e63946;color:#fff;font-weight:bold;transition:0.3s;cursor:pointer;border:none;text-decoration:none;}
     .btn:hover{background:#ff4d5b;transform:scale(1.05);}
     .grid{display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
-    @media(min-width:768px){.grid-2{grid-template-columns:repeat(2,1fr);} }
+    @media(min-width:768px){.grid-3{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:repeat(2,1fr);} }
     .card{background:rgba(255,255,255,0.05);padding:1.5rem;border-radius:1rem;
       border-left:4px solid #e63946;backdrop-filter:blur(6px);}
     .number{font-size:2rem;font-weight:800;color:#e63946;}
-
-    /* Tasarıma Özel İsim Kartı Stilleri */
+    
+    /* GÖRSEL ÜZERİNDEKİ VERİLER İÇİN GÜNCELLENEN STİL */
     .name-card{
       position:relative;
-      height:500px; /* Görseldeki oran için biraz yükseltildi */
+      height:450px;
       border-radius:1rem;
       overflow:hidden;
       background: url('insan.jpg') center/cover no-repeat;
@@ -47,43 +47,38 @@
       justify-content:center;
       align-items:center;
       text-align:center;
+      box-shadow: inset 0 0 100px rgba(0,0,0,0.8);
     }
-
-    /* Görselin üzerindeki karartma katmanı */
     .name-card::after {
       content: "";
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.65); /* Yazıların okunması için siyah katman */
+      background: rgba(0, 0, 0, 0.5); /* Resmi karartarak yazıyı öne çıkarır */
       z-index: 1;
     }
-
     .name-card h3, .name-card .name-number, .name-card p {
       position: relative;
-      z-index: 2; /* Yazıları siyah katmanın üzerine çıkarır */
-      color: #fff;
-      margin: 10px 0;
+      z-index: 2;
+      margin: 0.5rem 0;
     }
-
-    .name-card h3 {
+    .name-card h3{
       font-size: 1.8rem;
       font-weight: 700;
-      max-width: 80%;
+      color: #fff;
     }
-
-    .name-number {
-      font-size: 8rem; /* Görseldeki gibi çok büyük sayı */
+    .name-number{
+      font-size: 7rem;
       font-weight: 900;
-      color: #e63946 !important; /* Kırmızı sayı */
+      color: #e63946;
       line-height: 1;
     }
-
-    .name-card p {
+    .name-card p{
       font-size: 1.5rem;
       font-weight: 600;
+      color: #fff;
     }
-
-    .highlight-red { color: #ff4d5b; }
+    .name-card p strong { color: #fff; }
+    .name-card p span.highlight { color: #e63946; }
 
     footer{text-align:center;padding:2rem;margin-top:3rem;border-top:1px solid rgba(255,255,255,0.1);color:#aaa;}
     @keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);} }
@@ -93,7 +88,7 @@
 
   <section class="hero">
     <h1>Filistin İçin Adalet</h1>
-    <p>Sessizlik, zulmün en büyük silahıdır. Gerçekleri gör, adalet için ayağa kalk.</p>
+    <p>Sessizlik, zulmün en büyük silahıdır. Bugün senin sesin, Filistin’in nefesi olabilir.</p>
     <a href="#gercekler" class="btn">Gerçekleri Gör</a>
   </section>
 
@@ -109,15 +104,20 @@
       </div>
     </section>
 
-    <section id="sure" style="margin-top:2rem;">
+    <section id="sure">
       <h2>Ne Kadar Zamandır Sürüyor?</h2>
-      <div class="card">
-        <div class="number" id="yil">0</div>
-        <p>Gündür devam ediyor.</p>
+      <div class="card"><div class="number" id="yil">0</div><p>Gündür devam ediyor.</p></div>
+    </section>
+
+    <section id="hayat">
+      <h2>Birer Sayı Değil, Birer Hayat</h2>
+      <div class="grid grid-2">
+        <div class="card"><p>Her sayı, <strong>bir insanın hayatıdır.</strong></p></div>
+        <div class="card"><p>Bir çocuk… Bir anne… Bir sağlık çalışanı…</p></div>
       </div>
     </section>
 
-    <section id="isimler" style="margin-top:3rem;">
+    <section id="isimler">
       <h2>Bir İsim, Bir Hayat</h2>
       <div class="grid grid-2">
         <div class="name-card" id="card1"></div>
@@ -128,24 +128,27 @@
       </div>
     </section>
 
-    <section id="yardim" style="margin-top:3rem;">
+    <div class="note" style="margin-top:1rem;">
+      <a href="neden.html" style="color:#ffd6d6;text-decoration:underline;font-weight:600;">Bu sayıların neden yetersiz olduğunu öğrenin</a>
+    </div>
+
+    <section id="yardim">
       <h2>Nasıl Yardım Edebiliriz</h2>
       <div class="grid grid-2">
-        <div class="card"><p><strong>Boykot:</strong> Destek veren markaları kullanma.</p></div>
-        <div class="card"><p><strong>Bilinçlendirme:</strong> Gerçekleri çevrenle paylaş.</p></div>
+        <div class="card"><p><strong>Boykot</strong><br>İsrail destekli markaları kullanma.</p></div>
+        <div class="card"><p><strong>Bağış</strong><br>Yardım kuruluşlarını destekle.</p></div>
       </div>
     </section>
   </div>
 
   <footer>
-    <p>© 2025 Filistin İçin Adalet — Sessiz kalma.</p>
+    <a href="kaynakca.html" class="btn"> Kaynakça</a>
+    <a href="boykot.html" class="btn"> Boykotun Gücü</a>
+    <p>© 2025 Filistin İçin Adalet</p>
   </footer>
 
 <script>
-let isimVerileri = [];
-let index = 0;
-
-// Sayı sayma efekti
+// --- ANA VERİ FONKSİYONLARI ---
 function sayac(id, hedef, hiz){
   const el = document.getElementById(id);
   if(!el || hedef == null) return;
@@ -161,28 +164,29 @@ function sayac(id, hedef, hiz){
   }, hiz);
 }
 
-// Ana verileri çekme
 async function verileriYukle(){
   try{
     const res = await fetch("https://data.techforpalestine.org/api/v2/casualties_daily.json");
     const data = await res.json();
     const gunVerisi = data[data.length - 1];
-    
     sayac("sehit", gunVerisi.killed_cum, 10);
     sayac("cocuk", gunVerisi.ext_killed_children_cum, 14);
     sayac("saglik", gunVerisi.ext_med_killed_cum, 18);
     sayac("gazeteci", gunVerisi.ext_press_killed_cum, 22);
     sayac("yarali", gunVerisi.injured_cum, 16);
+    document.getElementById("sonGuncelleme").textContent = "(Son: " + gunVerisi.report_date + ")";
     
-    const ilkGun = new Date(data[0].report_date);
-    const sonGun = new Date(gunVerisi.report_date);
-    const gunFarki = Math.floor((sonGun - ilkGun) / (1000 * 60 * 60 * 24)) + 1;
-    document.getElementById("yil").textContent = gunFarki.toLocaleString() + " gündür";
-    document.getElementById("sonGuncelleme").textContent = "(Son güncelleme: " + gunVerisi.report_date + ")";
-  } catch(e) { console.error(e); }
+    const ilk = new Date(data[0].report_date);
+    const son = new Date(gunVerisi.report_date);
+    const fark = Math.floor((son - ilk) / (1000 * 60 * 60 * 24)) + 1;
+    document.getElementById("yil").textContent = fark.toLocaleString() + " gündür";
+  }catch(e){console.error(e);}
 }
 
-// İsimleri çekme ve güncelleme
+// --- İSİM VERİLERİ (JSON BAĞLANTILI) ---
+let isimVerileri = [];
+let index = 0;
+
 function turkceIsim(isim){
   const map = { Ahmad:"Ahmed", Mohammed:"Muhammed", Muhammad:"Muhammed", Yusuf:"Yusuf", Ali:"Ali", Omar:"Ömer", Hassan:"Hasan", Hussein:"Hüseyin", Ibrahim:"İbrahim" };
   return map[isim] || isim;
@@ -193,7 +197,7 @@ async function isimleriYukle(){
     const res = await fetch("https://data.techforpalestine.org/api/v2/killed-in-gaza/child-name-counts-en.json");
     isimVerileri = await res.json();
     guncelleKartlar();
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error("İsimler yüklenemedi", e); }
 }
 
 function guncelleKartlar(){
@@ -204,10 +208,11 @@ function guncelleKartlar(){
 
 function kartHTML(item){
   const isim = turkceIsim(item.name);
+  // Gönderdiğin resimdeki metin yapısına göre düzenlendi
   return `
     <h3>${isim} adında birini tanıyor musunuz?</h3>
     <div class="name-number">${item.count}</div>
-    <p><span class="highlight-red">${isim}</span> isimli çocuklar öldürüldü.</p>
+    <p><strong>${isim}</strong> isimli <span class="highlight">çocuklar</span> öldürüldü.</p>
   `;
 }
 
