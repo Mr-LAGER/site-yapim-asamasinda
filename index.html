@@ -26,19 +26,48 @@
     .container{max-width:1100px;margin:auto;padding:2rem;}
     .hero{text-align:center;padding:5rem 2rem;animation:fadeIn 2s ease-in;}
     .btn{display:inline-block;margin:1rem;padding:0.75rem 1.5rem;border-radius:0.5rem;
-      background:#e63946;color:#fff;font-weight:bold;transition:0.3s;}
+      background:#e63946;color:#fff;font-weight:bold;transition:0.3s; cursor:pointer; border:none;}
     .btn:hover{background:#ff4d5b;transform:scale(1.05);}
     .grid{display:grid;gap:1.5rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
     @media(min-width:768px){.grid-3{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:repeat(2,1fr);} }
     .card{background:rgba(255,255,255,0.05);padding:1.5rem;border-radius:1rem;
       border-left:4px solid #e63946;backdrop-filter:blur(6px);}
     .number{font-size:2rem;font-weight:800;color:#e63946;}
+    
+    /* EKLEDİĞİN STİLLER */
+    .name-card{
+      position:relative;
+      height:420px;
+      border-radius:1rem;
+      overflow:hidden;
+      background:
+        linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,.6)),
+        url('insan.jpg') center/cover no-repeat;
+      padding:1.5rem;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+    .name-card h3{
+      font-size:1.6rem;
+      font-weight:800;
+    }
+    .name-number{
+      font-size:5rem;
+      font-weight:900;
+      color:#e63946;
+      text-align:center;
+    }
+    .name-card p{
+      font-size:1.2rem;
+      text-align:center;
+    }
+
     footer{text-align:center;padding:2rem;margin-top:3rem;border-top:1px solid rgba(255,255,255,0.1);color:#aaa;}
     @keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);} }
   </style>
 </head>
 <body>
-  <!-- Hero -->
   <section class="hero">
     <h1>Filistin İçin Adalet</h1>
     <p>
@@ -50,7 +79,6 @@
   </section>
 
   <div class="container">
-    <!-- Gerçekler -->
     <section id="gercekler">
       <h2>
         Gerçekler
@@ -75,19 +103,10 @@
         </div>
         <div class="card">
           <div class="number" id="yarali">0</div>
-          <p>Yaralananlar.</p>
         </div>
-      </div>
-      <div style="margin-top:2rem;">
-        <p>
-          Filistin’de yaşanan trajedi sürüyor.  
-          Çocuklar oyun oynayacağı yaşta bombaların gölgesinde büyüyor, anneler evlatsız bırakılıyor.  
-          Sessizliğimiz zalimi güçlendirir. Dayanışmamız ise mazlumu ayağa kaldırır.
-        </p>
       </div>
     </section>
 
-    <!-- Ne Kadar Zamandır Sürüyor? -->
     <section id="sure">
       <h2>Ne Kadar Zamandır Sürüyor?</h2>
       <div class="card">
@@ -96,55 +115,59 @@
       </div>
     </section>
 
-    <!-- Günlük Kayıplar -->
-   <!-- Birer Sayı Değil, Birer Hayat -->
-<section id="hayat">
-  <h2>Birer Sayı Değil, Birer Hayat</h2>
+    <section id="hayat">
+      <h2>Birer Sayı Değil, Birer Hayat</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <p>
+            Bu ekranda gördüğün her sayı,<br>
+            <strong>bir insanın hayatıdır.</strong>
+          </p>
+        </div>
+        <div class="card">
+          <p>
+            Bir çocuk…<br>
+            Bir anne…<br>
+            Bir sağlık çalışanı…<br>
+            Bir gazeteci…
+          </p>
+        </div>
+        <div class="card">
+          <p>
+            Hepsinin bir ismi vardı.<br>
+            Hepsinin bir hayali vardı.<br>
+            Biz sadece sayılarını görebiliyoruz.
+          </p>
+        </div>
+        <div class="card">
+          <p>
+            Sessiz kalmak,<br>
+            bu kayıpların artmasına<br>
+            göz yummaktır.
+          </p>
+        </div>
+      </div>
+    </section>
 
-  <div class="grid grid-2">
-    <div class="card">
-      <p>
-        Bu ekranda gördüğün her sayı,<br>
-        <strong>bir insanın hayatıdır.</strong>
-      </p>
-    </div>
+    <section id="isimler" class="container">
+      <h2>Bir İsim, Bir Hayat</h2>
+      <div class="grid grid-2">
+        <div class="name-card" id="card1"></div>
+        <div class="name-card" id="card2"></div>
+      </div>
+      <div style="text-align:center;margin-top:2rem;">
+        <button class="btn" onclick="sonrakiIsimler()">
+          Daha fazla isim görün
+        </button>
+      </div>
+    </section>
 
-    <div class="card">
-      <p>
-        Bir çocuk…<br>
-        Bir anne…<br>
-        Bir sağlık çalışanı…<br>
-        Bir gazeteci…
-      </p>
-    </div>
-
-    <div class="card">
-      <p>
-        Hepsinin bir ismi vardı.<br>
-        Hepsinin bir hayali vardı.<br>
-        Biz sadece sayılarını görebiliyoruz.
-      </p>
-    </div>
-
-    <div class="card">
-      <p>
-        Sessiz kalmak,<br>
-        bu kayıpların artmasına<br>
-        göz yummaktır.
-      </p>
-    </div>
-  </div>
-</section>
-
-
-    <!-- Kısa yol: açıklama sayfasına yönlendirir -->
     <div class="note" style="margin-top:1rem;">
       <a href="neden.html" style="color:#ffd6d6;text-decoration:underline;font-weight:600;">
         Bu sayıların insan kaybını tam olarak yansıtmamasının nedenini öğrenin
       </a>
     </div>
 
-    <!-- Neden Destek Olmalıyız -->
     <section id="neden">
       <h2>Neden Destek Olmalıyız?</h2>
       <p>
@@ -154,7 +177,6 @@
       </p>
     </section>
 
-    <!-- Nasıl Yardım Edebiliriz -->
     <section id="yardim">
       <h2>Nasıl Yardım Edebiliriz</h2>
       <div class="grid grid-2">
@@ -172,36 +194,23 @@
         </div>
       </div>
     </section>
-
-    <!-- Dayanışma Çağrısı -->
-    <section id="cagri">
-      <h2>Dayanışma Çağrısı</h2>
-      <p>
-        Filistin’in özgürlüğü için verilen mücadele, insanlığın vicdan mücadelesidir.  
-        Bugün dayanışma gösterirsek, yarın çocukların gülüşüyle ödüllendiriliriz.
-      </p>
-    </section>
   </div>
 
-  <!-- Footer -->
   <footer>
     <a href="kaynakca.html" class="btn"> Kaynakça</a>
     <a href="boykot.html" class="btn"> Boykotun Gücü</a>
     <p style="margin-top:1rem;">© 2025 Filistin İçin Adalet — Sessiz kalma, adalet için sesini yükselt.</p>
   </footer>
 
-  <!-- Sayaç & Veri Çekme Script -->
 <script>
+// --- MEVCUT VERİ ÇEKME FONKSİYONLARI ---
 function sayac(id, hedef, hiz){
   const el = document.getElementById(id);
   if(!el || hedef == null) return;
-
   hedef = Number(hedef);
   if(isNaN(hedef)) return;
-
   let s = 0;
   const artim = Math.max(1, Math.ceil(hedef / 120));
-
   const iv = setInterval(()=>{
     s += artim;
     if(s >= hedef){
@@ -215,54 +224,68 @@ function sayac(id, hedef, hiz){
 
 async function verileriYukle(){
   try{
-    const res = await fetch(
-      "https://data.techforpalestine.org/api/v2/casualties_daily.json"
-    );
+    const res = await fetch("https://data.techforpalestine.org/api/v2/casualties_daily.json");
     const data = await res.json();
-
-    if(!Array.isArray(data) || data.length === 0)
-      throw "Veri yok";
-
-    // 📅 İlk ve son tarih
+    if(!Array.isArray(data) || data.length === 0) throw "Veri yok";
     const ilkGun = new Date(data[0].report_date);
     const sonGun = new Date(data[data.length - 1].report_date);
-
-    const gunFarki = Math.floor(
-      (sonGun - ilkGun) / (1000 * 60 * 60 * 24)
-    ) + 1;
-
-    document.getElementById("yil").textContent =
-      gunFarki.toLocaleString() + " gündür";
-
-    // 🔴 En güncel veri
+    const gunFarki = Math.floor((sonGun - ilkGun) / (1000 * 60 * 60 * 24)) + 1;
+    document.getElementById("yil").textContent = gunFarki.toLocaleString() + " gündür";
     const gunVerisi = data[data.length - 1];
-
-    // 📊 TOPLAM (CUMULATIVE) SAYILAR
     sayac("sehit", gunVerisi.killed_cum, 10);
     sayac("cocuk", gunVerisi.ext_killed_children_cum, 14);
     sayac("saglik", gunVerisi.ext_med_killed_cum, 18);
     sayac("gazeteci", gunVerisi.ext_press_killed_cum, 22);
     sayac("yarali", gunVerisi.injured_cum, 16);
+    document.getElementById("sonGuncelleme").textContent = "(Son güncelleme: " + gunVerisi.report_date + ")";
+  }catch(err){ console.error("Veri çekilemedi:", err); }
+}
 
-    // 🕒 Son güncelleme
-    document.getElementById("sonGuncelleme").textContent =
-      "(Son güncelleme: " + gunVerisi.report_date + ")";
+// --- EKLEDİĞİN SCRIPT BÖLÜMÜ ---
+let isimVerileri = [];
+let index = 0;
 
-  }catch(err){
-    console.error("Veri çekilemedi:", err);
-  }
+function turkceIsim(isim){
+  const map = {
+    Ahmad:"Ahmed", Mohammed:"Muhammed", Muhammad:"Muhammed", Yusuf:"Yusuf",
+    Ali:"Ali", Omar:"Ömer", Hassan:"Hasan", Hussein:"Hüseyin", Ibrahim:"İbrahim"
+  };
+  return map[isim] || isim;
+}
+
+async function isimleriYukle(){
+  const res = await fetch("https://data.techforpalestine.org/api/v2/killed-in-gaza/child-name-counts-en.json");
+  isimVerileri = await res.json();
+  guncelleKartlar();
+}
+
+function guncelleKartlar(){
+  if(isimVerileri.length < 2) return;
+  const a = isimVerileri[index % isimVerileri.length];
+  const b = isimVerileri[(index+1) % isimVerileri.length];
+  document.getElementById("card1").innerHTML = kartHTML(a);
+  document.getElementById("card2").innerHTML = kartHTML(b);
+}
+
+function kartHTML(item){
+  const isim = turkceIsim(item.name);
+  return `
+    <h3>${isim} adında birini tanıyor musunuz?</h3>
+    <div class="name-number">${item.count}</div>
+    <p><strong>${isim}</strong> isimli çocuklar öldürüldü.</p>
+  `;
+}
+
+function sonrakiIsimler(){
+  index += 2;
+  guncelleKartlar();
 }
 
 window.addEventListener("load", ()=>{
-  verileriYukle();                 // sayfa açılınca
-  setInterval(verileriYukle, 3600000); // ⏱ saatte 1
+  verileriYukle();
+  isimleriYukle(); // Yeni eklenen fonksiyon
+  setInterval(verileriYukle, 3600000);
 });
 </script>
-
 </body>
 </html>
-
-
-
-
-
