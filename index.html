@@ -162,99 +162,72 @@
   </footer>
 
   <!-- Sayaç & Veri Çekme Script -->
-  <script>
-    function sayac(id, hedef, hiz){
-      const el = document.getElementById(id);
-      if(!el) return;
-      hedef = Number.isFinite(Number(hedef)) ? Math.max(0, Math.floor(Number(hedef))) : 0;
-      if(hedef === 0){ el.textContent = "0"; return; }
-      let sayi = 0;
-      const artim = Math.max(1, Math.ceil(hedef/100));
-      const iv = setInterval(()=>{
-        sayi += artim;
-        if(sayi >= hedef){
-          sayi = hedef;
-          clearInterval(iv);
-          el.textContent = sayi.toLocaleString() + "+";
-        } else {
-          el.textContent = sayi.toLocaleString();
-        }
-      }, hiz);
+<script>
+function sayac(id, hedef, hiz){
+  const el=document.getElementById(id);
+  if(!el) return;
+  hedef=Math.max(0,Math.floor(Number(hedef)||0));
+  let s=0;
+  const artim=Math.max(1,Math.ceil(hedef/100));
+  const iv=setInterval(()=>{
+    s+=artim;
+    if(s>=hedef){
+      el.textContent=hedef.toLocaleString()+"+";
+      clearInterval(iv);
+    }else{
+      el.textContent=s.toLocaleString();
+    }
+  },hiz);
+}
+
+function formatDate(d){
+  return d.toISOString().split("T")[0];
+}
+
+async function verileriYukle(){
+  try{
+    const res = await fetch(
+      "https://data.techforpalestine.org/api/v2/casualties_daily.json"
+    );
+    const data = await res.json();
+
+    // HER ZAMAN EN SON GÜN (bugün raporlanmadıysa dün)
+    let tarih = new Date();
+    let gunVerisi = null;
+
+    for(let i=0;i<3;i++){
+      const t = formatDate(tarih);
+      gunVerisi = data.find(x => x.report_date === t);
+      if(gunVerisi) break;
+      tarih.setDate(tarih.getDate()-1);
     }
 
-    function getValue(obj, keys, fallback=0){
-      if(!obj) return fallback;
-      for(const k of keys){
-        if(Object.prototype.hasOwnProperty.call(obj,k) && obj[k] !== null && obj[k] !== undefined){
-          const n = Number(obj[k]);
-          return Number.isFinite(n) ? n : fallback;
-        }
-      }
-      return fallback;
-    }
+    if(!gunVerisi) throw "Veri bulunamadı";
 
-    function computeDaysSince(api){
-      const keys = ['day','days','day_count','day_number','days_since','daysPassed','days_passed'];
-      for(const k of keys){
-        if(api && k in api && Number.isFinite(Number(api[k]))){
-          return Math.floor(Number(api[k]));
-        }
-      }
-      const start = new Date('2023-10-07T00:00:00Z');
-      const today = new Date();
-      return Math.floor((today - start)/(24*3600*1000)) + 1;
-    }
+    // 🔴 TOPLAM (CUMULATIVE) VERİLER
+    sayac("sehit", gunVerisi.killed_cum, 10);
+    sayac("cocuk", gunVerisi.killed_children_cum, 15);
+    sayac("saglik", gunVerisi.med_killed_cum, 20);
+    sayac("gazeteci", gunVerisi.press_killed_cum, 25);
+    sayac("yarali", gunVerisi.injured_cum, 18);
 
-    async function verileriYukle(){
-      try{
-        const res = await fetch("https://data.techforpalestine.org/");
-        const data = await res.json();
+    // SÜRE
+    const start = new Date("2023-10-07T00:00:00Z");
+    const diff = Math.floor((new Date() - start)/(24*3600*1000)) + 1;
+    document.getElementById("yil").textContent =
+      diff.toLocaleString() + " gündür";
 
-        const totalKilled = getValue(data, ['killed','total_killed','killed_total','deaths','total_deaths','sehit']);
-        const childrenKilled = getValue(data, ['children_killed','children','child_deaths','child_killed','cocuk']);
-        const medicalKilled = getValue(data, ['medical_personnel_killed','medical_killed','health_workers_killed','medical_personnel','medical']);
-        const journalistsKilled = getValue(data, ['journalists_killed','journalists','journalist_killed']);
-        const injured = getValue(data, ['injured','wounded','injuries','injured_total','total_injured']);
-        const dailyChildren = getValue(data, ['daily_children_killed','daily_child_killed','daily_children']);
-        const dailyBuildings = getValue(data, ['daily_structures_destroyed','daily_buildings','daily_buildings_destroyed']);
+  }catch(err){
+    console.error("Veri alınamadı:", err);
+  }
+}
 
-        const days = computeDaysSince(data);
+window.addEventListener("load", ()=>{
+  verileriYukle();                  // sayfa açılınca
+  setInterval(verileriYukle, 3600000); // ⏱ saatte 1
+});
+</script>
 
-        sayac("sehit", totalKilled, 10);
-        sayac("cocuk", childrenKilled, 15);
-        sayac("saglik", medicalKilled, 20);
-        sayac("gazeteci", journalistsKilled, 25);
-        sayac("yarali", injured, 18);
-
-        const yilEl = document.getElementById('yil');
-        if(yilEl) yilEl.textContent = days.toLocaleString() + " gündür";
-
-        if(document.getElementById('gunlukCocuk')) sayac("gunlukCocuk", dailyChildren, 80);
-        if(document.getElementById('gunlukBina')) sayac("gunlukBina", dailyBuildings, 100);
-
-      }catch(err){
-        console.error("Veri çekilemedi:", err);
-        sayac("sehit", 66125, 10);
-        sayac("cocuk", 20460, 15);
-        sayac("saglik", 1670, 20);
-        sayac("gazeteci", 251, 25);
-        sayac("yarali", 175069, 18);
-
-        const start = new Date('2023-10-07T00:00:00Z');
-        const today = new Date();
-        const diff = Math.floor((today - start)/(24*3600*1000)) + 1;
-        const yilEl = document.getElementById('yil');
-        if(yilEl) yilEl.textContent = diff.toLocaleString() + " gündür";
-
-        sayac("gunlukCocuk", 10, 80);
-        sayac("gunlukBina", 5, 100);
-      }
-    }
-
-    window.addEventListener('load', ()=>{
-      verileriYukle();
-      setInterval(verileriYukle, 60000);
-    });
-  </script>
 </body>
 </html>
+
