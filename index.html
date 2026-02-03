@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Otizm & Alzheimer Hasta Takip Sistemi</title>
+    <title>Hasta Takip Sistemi - Otizm & Alzheimer</title>
+    
+    <!-- Leaflet CSS (Harita için) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     
     <style>
         * {
@@ -16,7 +25,6 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: #333;
-            min-height: 100vh;
         }
         
         .container {
@@ -27,7 +35,7 @@
         
         header {
             background: rgba(255, 255, 255, 0.95);
-            padding: 25px;
+            padding: 20px;
             border-radius: 15px;
             margin-bottom: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
@@ -36,18 +44,18 @@
         h1 {
             color: #667eea;
             font-size: 28px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .status-bar {
             display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
+            gap: 20px;
             align-items: center;
+            flex-wrap: wrap;
         }
         
-        .status-badge {
-            display: inline-flex;
+        .status-item {
+            display: flex;
             align-items: center;
             gap: 8px;
             padding: 8px 15px;
@@ -63,11 +71,11 @@
             animation: pulse 2s infinite;
         }
         
-        .status-indicator.online {
+        .status-indicator.connected {
             background: #10b981;
         }
         
-        .status-indicator.offline {
+        .status-indicator.disconnected {
             background: #ef4444;
         }
         
@@ -76,57 +84,9 @@
             50% { opacity: 0.5; }
         }
         
-        .config-section {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        
-        .input-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        
-        input {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        
-        button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        
-        button:hover {
-            background: #5568d3;
-        }
-        
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-bottom: 20px;
         }
@@ -143,15 +103,19 @@
             font-weight: bold;
             margin-bottom: 15px;
             color: #667eea;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        }
+        
+        #map {
+            height: 500px;
+            border-radius: 10px;
+            margin-bottom: 20px;
         }
         
         .metric {
             display: flex;
             justify-content: space-between;
-            padding: 10px 0;
+            align-items: center;
+            padding: 12px 0;
             border-bottom: 1px solid #e0e0e0;
         }
         
@@ -159,53 +123,15 @@
             border-bottom: none;
         }
         
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
         .metric-value {
-            font-size: 20px;
+            font-size: 24px;
             font-weight: bold;
             color: #333;
-        }
-        
-        #map {
-            height: 500px;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        
-        .alert {
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            animation: slideIn 0.3s;
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateX(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        
-        .alert.warning {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-        }
-        
-        .alert.critical {
-            background: #fee2e2;
-            border-left: 4px solid #ef4444;
-        }
-        
-        .alert.info {
-            background: #dbeafe;
-            border-left: 4px solid #3b82f6;
         }
         
         .battery-bar {
@@ -214,18 +140,20 @@
             background: #e0e0e0;
             border-radius: 15px;
             overflow: hidden;
+            position: relative;
             margin-top: 10px;
         }
         
         .battery-fill {
             height: 100%;
             background: linear-gradient(90deg, #10b981, #059669);
-            transition: width 0.5s, background 0.5s;
+            transition: width 0.3s, background 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
+            font-size: 14px;
         }
         
         .battery-fill.low {
@@ -236,13 +164,36 @@
             background: linear-gradient(90deg, #f59e0b, #d97706);
         }
         
+        .alert-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        
+        .alert-box.critical {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+        
+        .alert-time {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .chart-container {
+            height: 250px;
+            margin-top: 15px;
+        }
+        
         .coordinates {
-            background: #f9fafb;
-            padding: 12px;
-            border-radius: 8px;
             font-family: 'Courier New', monospace;
-            font-size: 13px;
-            margin-top: 10px;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -251,280 +202,252 @@
         <header>
             <h1>🏥 Otizm & Alzheimer Hasta Takip Sistemi</h1>
             <div class="status-bar">
-                <div class="status-badge">
-                    <div class="status-indicator" id="statusIndicator"></div>
-                    <span id="statusText">Bağlantı Bekleniyor...</span>
+                <div class="status-item">
+                    <div class="status-indicator" id="connectionStatus"></div>
+                    <span id="connectionText">Bağlantı Bekleniyor...</span>
                 </div>
-                <div class="status-badge">
-                    ⏱️ Son Güncelleme: <strong id="lastUpdate">-</strong>
+                <div class="status-item">
+                    <span>⏱️ Son Güncelleme: <strong id="lastUpdate">-</strong></span>
                 </div>
-                <div class="status-badge">
-                    📦 Paket: <strong id="packetId">-</strong>
+                <div class="status-item">
+                    <span>📦 Paket ID: <strong id="packetId">-</strong></span>
                 </div>
             </div>
         </header>
         
-        <!-- Yapılandırma -->
-        <div class="config-section">
-            <div class="card-title">⚙️ Bağlantı Ayarları</div>
-            <div class="input-group">
-                <label>Ev Modülü IP Adresi:</label>
-                <input type="text" id="serverIp" placeholder="192.168.1.100" value="192.168.1.100">
-                <small style="color: #666; display: block; margin-top: 5px;">
-                    Ev modülünüzün seri monitöründeki IP adresini buraya girin
-                </small>
-            </div>
-            <button onclick="connectToServer()">Bağlan</button>
-        </div>
-        
         <!-- Harita -->
         <div class="card">
-            <div class="card-title">📍 Konum Takibi (Google Maps)</div>
+            <div class="card-title">📍 Konum Takibi</div>
             <div id="map"></div>
             <div class="coordinates" id="coordinates">
-                Konum verisi bekleniyor...
+                Koordinatlar bekleniyor...
             </div>
         </div>
         
-        <!-- Metrikler -->
+        <!-- Ana Metrikler -->
         <div class="grid">
+            <!-- Pil Durumu -->
             <div class="card">
                 <div class="card-title">🔋 Pil Durumu</div>
                 <div class="metric">
-                    <span>Seviye</span>
-                    <span class="metric-value" id="batteryLevel">-</span>
+                    <span class="metric-label">Voltaj</span>
+                    <span class="metric-value" id="batteryVoltage">-</span>
                 </div>
                 <div class="battery-bar">
                     <div class="battery-fill" id="batteryBar">-%</div>
                 </div>
             </div>
             
+            <!-- Basınç Sensörü -->
             <div class="card">
-                <div class="card-title">👟 Ayakkabı Durumu</div>
+                <div class="card-title">⚖️ Ayak Basıncı</div>
                 <div class="metric">
-                    <span>Durum</span>
-                    <span class="metric-value" id="shoeStatus">-</span>
+                    <span class="metric-label">Kuvvet (Newton)</span>
+                    <span class="metric-value" id="forceValue">-</span>
                 </div>
-                <div class="metric">
-                    <span>Basınç</span>
-                    <span class="metric-value" id="pressure">-</span>
+                <div class="chart-container">
+                    <canvas id="forceChart"></canvas>
                 </div>
             </div>
             
+            <!-- İvmeölçer -->
             <div class="card">
-                <div class="card-title">📊 İvmeölçer</div>
+                <div class="card-title">📊 İvmeölçer (m/s²)</div>
                 <div class="metric">
-                    <span>İvme Büyüklüğü</span>
-                    <span class="metric-value" id="accelMagnitude">-</span>
+                    <span class="metric-label">X Ekseni</span>
+                    <span class="metric-value" id="accelX">-</span>
                 </div>
                 <div class="metric">
-                    <span>Düşme Algılama</span>
-                    <span class="metric-value" id="fallStatus">-</span>
+                    <span class="metric-label">Y Ekseni</span>
+                    <span class="metric-value" id="accelY">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Z Ekseni</span>
+                    <span class="metric-value" id="accelZ">-</span>
                 </div>
             </div>
         </div>
         
         <!-- Uyarılar -->
         <div class="card">
-            <div class="card-title">⚠️ Uyarılar</div>
+            <div class="card-title">⚠️ Uyarılar ve Bildirimler</div>
             <div id="alertsContainer">
                 <p style="color: #666; text-align: center;">Henüz uyarı yok</p>
             </div>
         </div>
     </div>
     
-    <!-- Google Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
-        let map;
-        let marker;
-        let pathPolyline;
+        // Socket.IO bağlantısı
+        const socket = io('http://localhost:5000');
+        
+        // Harita başlat
+        const map = L.map('map').setView([39.9334, 32.8597], 13); // Ankara merkez
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        let currentMarker = null;
+        let pathPolyline = null;
         let pathCoordinates = [];
-        let serverIp = '';
-        let updateInterval;
         
-        // Haritayı başlat
-        function initMap() {
-            map = new google.maps.Map(document.getElementById('map'), {
-                center: { lat: 39.9334, lng: 32.8597 },
-                zoom: 15
-            });
-        }
-        
-        // Sunucuya bağlan
-        function connectToServer() {
-            serverIp = document.getElementById('serverIp').value.trim();
-            
-            if (!serverIp) {
-                alert('Lütfen geçerli bir IP adresi girin!');
-                return;
+        // Chart.js grafikleri
+        const forceCtx = document.getElementById('forceChart').getContext('2d');
+        const forceChart = new Chart(forceCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Basınç (N)',
+                    data: [],
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
             }
+        });
+        
+        // Socket.IO event'leri
+        socket.on('connect', () => {
+            console.log('Sunucuya bağlandı');
+            updateConnectionStatus(true);
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('Sunucudan ayrıldı');
+            updateConnectionStatus(false);
+        });
+        
+        socket.on('sensor_update', (data) => {
+            updateUI(data);
+        });
+        
+        socket.on('alert', (alert) => {
+            addAlert(alert);
+        });
+        
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            const textEl = document.getElementById('connectionText');
             
-            // Test bağlantısı
-            fetch(`http://${serverIp}/api/status`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.system === 'online') {
-                        updateStatus(true, 'Bağlı');
-                        addAlert('info', 'Ev modülüne başarıyla bağlanıldı!');
-                        
-                        // Otomatik güncellemeyi başlat
-                        if (updateInterval) clearInterval(updateInterval);
-                        updateInterval = setInterval(fetchData, 2000);
-                        fetchData(); // İlk veriyi hemen çek
-                    }
-                })
-                .catch(error => {
-                    updateStatus(false, 'Bağlantı Hatası');
-                    addAlert('critical', 'Ev modülüne bağlanılamadı: ' + error.message);
-                });
+            if (connected) {
+                statusEl.className = 'status-indicator connected';
+                textEl.textContent = 'Bağlı';
+            } else {
+                statusEl.className = 'status-indicator disconnected';
+                textEl.textContent = 'Bağlantı Kesildi';
+            }
         }
         
-        // Veri çek
-        function fetchData() {
-            if (!serverIp) return;
-            
-            fetch(`http://${serverIp}/api/latest`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.log('Veri yok:', data.error);
-                        return;
-                    }
-                    
-                    updateUI(data);
-                })
-                .catch(error => {
-                    console.error('Veri çekme hatası:', error);
-                    updateStatus(false, 'Bağlantı Kesildi');
-                });
-        }
-        
-        // Arayüzü güncelle
         function updateUI(data) {
+            // Zaman damgası
             const now = new Date();
             document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('tr-TR');
             document.getElementById('packetId').textContent = data.packetId || '-';
             
-            // Durum
-            updateStatus(data.connected, data.connected ? 'Bağlı' : 'Bağlantı Yok');
-            
-            // Konum
-            if (data.location && data.location.valid) {
+            // Konum güncelleme
+            if (data.location && data.location.status === 'active') {
                 const lat = data.location.latitude;
                 const lon = data.location.longitude;
                 
+                // Koordinatları göster
                 document.getElementById('coordinates').innerHTML = `
                     <strong>Enlem:</strong> ${lat.toFixed(6)}° | 
                     <strong>Boylam:</strong> ${lon.toFixed(6)}°
                 `;
                 
-                updateMap(lat, lon);
-            } else {
-                document.getElementById('coordinates').textContent = 'GPS sinyali bekleniyor...';
+                // Haritayı güncelle
+                if (!currentMarker) {
+                    currentMarker = L.marker([lat, lon]).addTo(map);
+                    currentMarker.bindPopup('<b>Hasta Konumu</b><br>Güncel konum').openPopup();
+                    map.setView([lat, lon], 15);
+                } else {
+                    currentMarker.setLatLng([lat, lon]);
+                }
+                
+                // Yol çiz
+                pathCoordinates.push([lat, lon]);
+                if (pathCoordinates.length > 100) {
+                    pathCoordinates.shift(); // Son 100 konum
+                }
+                
+                if (pathPolyline) {
+                    map.removeLayer(pathPolyline);
+                }
+                
+                pathPolyline = L.polyline(pathCoordinates, {
+                    color: '#667eea',
+                    weight: 3,
+                    opacity: 0.7
+                }).addTo(map);
             }
             
-            // Pil
+            // Pil durumu
             if (data.battery) {
-                const level = data.battery.level;
-                document.getElementById('batteryLevel').textContent = `%${level}`;
+                const voltage = data.battery.voltage.toFixed(2);
+                const percentage = data.battery.percentage;
                 
-                const bar = document.getElementById('batteryBar');
-                bar.style.width = level + '%';
-                bar.textContent = `%${level}`;
-                bar.className = 'battery-fill';
+                document.getElementById('batteryVoltage').textContent = voltage + ' V';
                 
-                if (level < 20) {
-                    bar.classList.add('low');
-                    addAlert('warning', `Düşük pil seviyesi: %${level}`);
-                } else if (level < 50) {
-                    bar.classList.add('medium');
+                const batteryBar = document.getElementById('batteryBar');
+                batteryBar.style.width = percentage + '%';
+                batteryBar.textContent = percentage + '%';
+                
+                // Renk değişimi
+                batteryBar.className = 'battery-fill';
+                if (percentage < 20) {
+                    batteryBar.classList.add('low');
+                } else if (percentage < 50) {
+                    batteryBar.classList.add('medium');
                 }
             }
             
-            // Ayakkabı
-            if (data.status) {
-                const worn = data.status.shoeWorn;
-                document.getElementById('shoeStatus').textContent = worn ? '✓ Giyili' : '✗ Çıkarılmış';
-                document.getElementById('shoeStatus').style.color = worn ? '#10b981' : '#ef4444';
-                document.getElementById('pressure').textContent = data.status.pressure;
+            // Basınç
+            if (data.force !== undefined) {
+                document.getElementById('forceValue').textContent = data.force.toFixed(2) + ' N';
                 
-                if (!worn) {
-                    addAlert('warning', 'Ayakkabı çıkarıldı!');
+                // Grafiğe ekle
+                const timeLabel = now.toLocaleTimeString('tr-TR');
+                forceChart.data.labels.push(timeLabel);
+                forceChart.data.datasets[0].data.push(data.force);
+                
+                // Son 20 veri
+                if (forceChart.data.labels.length > 20) {
+                    forceChart.data.labels.shift();
+                    forceChart.data.datasets[0].data.shift();
                 }
+                
+                forceChart.update('none');
             }
             
-            // İvme ve düşme
-            if (data.acceleration !== undefined) {
-                document.getElementById('accelMagnitude').textContent = data.acceleration.toFixed(2) + ' m/s²';
-            }
-            
-            if (data.status && data.status.fallDetected) {
-                document.getElementById('fallStatus').textContent = '⚠️ DÜŞME!';
-                document.getElementById('fallStatus').style.color = '#ef4444';
-                addAlert('critical', '🚨 DÜŞME ALGILANDI! Hasta düşmüş olabilir!');
-            } else {
-                document.getElementById('fallStatus').textContent = '✓ Normal';
-                document.getElementById('fallStatus').style.color = '#10b981';
+            // İvmeölçer
+            if (data.accelerometer) {
+                document.getElementById('accelX').textContent = data.accelerometer.x.toFixed(2);
+                document.getElementById('accelY').textContent = data.accelerometer.y.toFixed(2);
+                document.getElementById('accelZ').textContent = data.accelerometer.z.toFixed(2);
             }
         }
         
-        // Haritayı güncelle
-        function updateMap(lat, lon) {
-            const position = { lat: lat, lng: lon };
-            
-            if (!marker) {
-                marker = new google.maps.Marker({
-                    position: position,
-                    map: map,
-                    title: 'Hasta Konumu',
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 10,
-                        fillColor: '#667eea',
-                        fillOpacity: 1,
-                        strokeColor: 'white',
-                        strokeWeight: 3
-                    }
-                });
-                map.setCenter(position);
-            } else {
-                marker.setPosition(position);
-            }
-            
-            // Yol çiz
-            pathCoordinates.push(position);
-            if (pathCoordinates.length > 50) {
-                pathCoordinates.shift();
-            }
-            
-            if (pathPolyline) {
-                pathPolyline.setMap(null);
-            }
-            
-            pathPolyline = new google.maps.Polyline({
-                path: pathCoordinates,
-                geodesic: true,
-                strokeColor: '#667eea',
-                strokeOpacity: 0.8,
-                strokeWeight: 3
-            });
-            
-            pathPolyline.setMap(map);
-        }
-        
-        // Durum göstergesi
-        function updateStatus(connected, text) {
-            const indicator = document.getElementById('statusIndicator');
-            const statusText = document.getElementById('statusText');
-            
-            indicator.className = 'status-indicator ' + (connected ? 'online' : 'offline');
-            statusText.textContent = text;
-        }
-        
-        // Uyarı ekle
-        function addAlert(type, message) {
+        function addAlert(alert) {
             const container = document.getElementById('alertsContainer');
             
             // İlk uyarıysa placeholder'ı kaldır
@@ -532,31 +455,30 @@
                 container.innerHTML = '';
             }
             
-            // Aynı mesajdan varsa ekleme
-            const existing = Array.from(container.children).find(el => el.textContent.includes(message));
-            if (existing) return;
-            
-            const alert = document.createElement('div');
-            alert.className = `alert ${type}`;
-            alert.innerHTML = `
-                <strong>${message}</strong>
-                <small style="margin-left: auto; color: #666;">
-                    ${new Date().toLocaleTimeString('tr-TR')}
-                </small>
+            const alertDiv = document.createElement('div');
+            alertDiv.className = alert.type === 'low_battery' ? 'alert-box critical' : 'alert-box';
+            alertDiv.innerHTML = `
+                <strong>${alert.message}</strong>
+                <div class="alert-time">${new Date(alert.timestamp).toLocaleString('tr-TR')}</div>
             `;
             
-            container.insertBefore(alert, container.firstChild);
+            container.insertBefore(alertDiv, container.firstChild);
             
-            // Maksimum 5 uyarı
+            // En fazla 5 uyarı göster
             while (container.children.length > 5) {
                 container.removeChild(container.lastChild);
             }
         }
         
-        // Sayfa yüklendiğinde
-        window.onload = function() {
-            initMap();
-        };
+        // İlk veriyi çek
+        fetch('http://localhost:5000/api/latest')
+            .then(response => response.json())
+            .then(result => {
+                if (result.data) {
+                    updateUI(result.data);
+                }
+            })
+            .catch(error => console.error('Veri çekme hatası:', error));
     </script>
 </body>
-</html>
+</html>  bunun gibi bişey yapamazmısın
