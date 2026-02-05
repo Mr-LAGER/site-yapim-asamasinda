@@ -276,9 +276,9 @@ fetch('${req.protocol}://${req.get('host')}/all-locations')
             
             <script>
                 async function clearAllLocations() {
-                    const confirmation = prompt('Tüm konumları silmek için "SIL" yazın:');
+                    const confirmation = prompt('Tüm konumları silmek için "" yazın:');
                     
-                    if (confirmation === 'SIL') {
+                    if (confirmation === '') {
                         try {
                             const response = await fetch('/clear', {
                                 method: 'DELETE'
