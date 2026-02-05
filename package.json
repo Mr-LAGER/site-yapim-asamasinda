@@ -1,20 +1,25 @@
 {
-  "name": "deneyap-kart-server",
+  "name": "deneyap-location-tracker",
   "version": "1.0.0",
-  "description": "Deneyap Kart için veri alma sunucusu",
+  "description": "Deneyap Kart konum takip sunucusu",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "keywords": [
     "deneyap",
     "iot",
-    "express"
+    "gps",
+    "location",
+    "tracking"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
+  }
+}
