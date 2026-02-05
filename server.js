@@ -472,6 +472,10 @@ app.get('/', (req, res) => {
                         <div class="stat-value">${lastLocation ? lastLocation.lng.toFixed(6) : '-'}</div>
                         <div class="stat-label">Son Boylam</div>
                     </div>
+                    <div class="stat-card" style="background: ${lastLocation && lastLocation.wearing ? 'linear-gradient(135deg, #28a745 0%, #218838 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'};">
+                        <div class="stat-value">${lastLocation ? (lastLocation.wearing ? '✅' : '❌') : '-'}</div>
+                        <div class="stat-label">Giyilme Durumu</div>
+                    </div>
                 </div>
                 
                 <div id="map"></div>
@@ -484,7 +488,12 @@ app.get('/', (req, res) => {
                                 <div class="location-coords">
                                     📌 Enlem: ${loc.lat.toFixed(6)} | Boylam: ${loc.lng.toFixed(6)}
                                 </div>
-                                <div class="location-time">🕐 ${loc.timestamp}</div>
+                                <div class="location-time">
+                                    🕐 ${loc.timestamp} | 
+                                    <span style="color: ${loc.wearing ? '#28a745' : '#dc3545'}; font-weight: bold;">
+                                        ${loc.wearing ? '✅ Giyildi' : '❌ Giyilmedi'}
+                                    </span>
+                                </div>
                             </div>
                         `).join('') 
                         : '<div class="no-data">Henüz konum verisi alınmadı. Deneyap Kart\'ı başlatın...</div>'
@@ -505,9 +514,86 @@ app.get('/', (req, res) => {
                 }).addTo(map);
                 
                 // Tüm konumları haritaya ekle
-                const locations = ${JSON.stringify(locationData)};
+                let locations = ${JSON.stringify(locationData)};
+                let markers = [];
                 
-                // Konum silme fonksiyonu
+                // Marker'ları çizme fonksiyonu
+                function drawMarkers() {
+                    // Eski marker'ları temizle
+                    markers.forEach(marker => map.removeLayer(marker));
+                    markers = [];
+                    
+                    if (locations.length > 0) {
+                        // Marker'ları ekle
+                        locations.forEach((loc, index) => {
+                            const marker = L.marker([loc.lat, loc.lng]).addTo(map);
+                            markers.push(marker);
+                            
+                            const wearingColor = loc.wearing ? '#28a745' : '#dc3545';
+                            const wearingText = loc.wearing ? '✅ Giyildi' : '❌ Giyilmedi';
+                            
+                            marker.bindPopup(\`
+                                <div style="min-width: 220px;">
+                                    <b style="color: \${index === locations.length - 1 ? '#dc3545' : '#667eea'}; font-size: 1.1em;">
+                                        \${index === locations.length - 1 ? '🔴 Son Konum' : '📍 Konum ' + (index + 1)}
+                                    </b>
+                                    <hr style="margin: 8px 0; border-color: #ddd;">
+                                    <div style="margin: 5px 0;">
+                                        <strong>📍 Enlem:</strong> \${loc.lat.toFixed(6)}
+                                    </div>
+                                    <div style="margin: 5px 0;">
+                                        <strong>📍 Boylam:</strong> \${loc.lng.toFixed(6)}
+                                    </div>
+                                    <div style="margin: 5px 0;">
+                                        <strong>👕 Durum:</strong> 
+                                        <span style="color: \${wearingColor}; font-weight: bold;">
+                                            \${wearingText}
+                                        </span>
+                                    </div>
+                                    <div style="margin: 5px 0; color: #666;">
+                                        <strong>🕐 Zaman:</strong> \${loc.timestamp}
+                                    </div>
+                                    <hr style="margin: 8px 0; border-color: #ddd;">
+                                    <button 
+                                        onclick="deleteLocation(\${index})" 
+                                        style="
+                                            width: 100%;
+                                            padding: 8px;
+                                            background: #dc3545;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 5px;
+                                            cursor: pointer;
+                                            font-weight: bold;
+                                            font-size: 0.9em;
+                                            transition: all 0.3s ease;
+                                        "
+                                        onmouseover="this.style.background='#c82333'"
+                                        onmouseout="this.style.background='#dc3545'"
+                                    >
+                                        ❌ Bu Konumu Sil
+                                    </button>
+                                </div>
+                            \`);
+                            
+                            // Son konum için popup'ı aç
+                            if (index === locations.length - 1) {
+                                marker.openPopup();
+                            }
+                        });
+                        
+                        // Tüm marker'ları gösterecek şekilde zoom ayarla
+                        if (locations.length > 1) {
+                            const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lng]));
+                            map.fitBounds(bounds, { padding: [50, 50] });
+                        }
+                    }
+                }
+                
+                // İlk çizim
+                drawMarkers();
+                
+                // Konum silme fonksiyonu (SAYFA YENİLEME OLMADAN)
                 async function deleteLocation(index) {
                     if (confirm('Bu konumu silmek istediğinizden emin misiniz?')) {
                         try {
@@ -517,69 +603,40 @@ app.get('/', (req, res) => {
                             const result = await response.json();
                             
                             if (result.success) {
-                                alert('✅ Konum silindi!');
-                                location.reload();
+                                // Başarılı silme - listeyi güncelle
+                                locations.splice(index, 1);
+                                
+                                // Haritayı yeniden çiz
+                                drawMarkers();
+                                
+                                // Başarı mesajı
+                                const notification = document.createElement('div');
+                                notification.style.cssText = \`
+                                    position: fixed;
+                                    top: 20px;
+                                    right: 20px;
+                                    background: #28a745;
+                                    color: white;
+                                    padding: 15px 25px;
+                                    border-radius: 10px;
+                                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                                    z-index: 10000;
+                                    font-weight: bold;
+                                \`;
+                                notification.textContent = '✅ Konum silindi!';
+                                document.body.appendChild(notification);
+                                
+                                setTimeout(() => {
+                                    notification.remove();
+                                    // 2 saniye sonra sayfayı yenile (istatistikleri güncellemek için)
+                                    location.reload();
+                                }, 2000);
                             } else {
                                 alert('❌ Hata: ' + result.message);
                             }
                         } catch (error) {
                             alert('❌ Silme hatası: ' + error.message);
                         }
-                    }
-                }
-                
-                if (locations.length > 0) {
-                    // Marker'ları ekle
-                    locations.forEach((loc, index) => {
-                        const marker = L.marker([loc.lat, loc.lng]).addTo(map);
-                        marker.bindPopup(\`
-                            <div style="min-width: 200px;">
-                                <b style="color: \${index === locations.length - 1 ? '#dc3545' : '#667eea'}; font-size: 1.1em;">
-                                    \${index === locations.length - 1 ? '🔴 Son Konum' : '📍 Konum ' + (index + 1)}
-                                </b>
-                                <hr style="margin: 8px 0; border-color: #ddd;">
-                                <div style="margin: 5px 0;">
-                                    <strong>📍 Enlem:</strong> \${loc.lat.toFixed(6)}
-                                </div>
-                                <div style="margin: 5px 0;">
-                                    <strong>📍 Boylam:</strong> \${loc.lng.toFixed(6)}
-                                </div>
-                                <div style="margin: 5px 0; color: #666;">
-                                    <strong>🕐 Zaman:</strong> \${loc.timestamp}
-                                </div>
-                                <hr style="margin: 8px 0; border-color: #ddd;">
-                                <button 
-                                    onclick="deleteLocation(\${index})" 
-                                    style="
-                                        width: 100%;
-                                        padding: 8px;
-                                        background: #dc3545;
-                                        color: white;
-                                        border: none;
-                                        border-radius: 5px;
-                                        cursor: pointer;
-                                        font-weight: bold;
-                                        font-size: 0.9em;
-                                        transition: all 0.3s ease;
-                                    "
-                                    onmouseover="this.style.background='#c82333'"
-                                    onmouseout="this.style.background='#dc3545'"
-                                >
-                                    ❌ Bu Konumu Sil
-                                </button>
-                            </div>
-                        \`);
-                        
-                        // Son konum için popup'ı aç
-                        if (index === locations.length - 1) {
-                            marker.openPopup();
-                        }
-                    });
-                    
-                    // Tüm marker'ları gösterecek şekilde zoom ayarla
-                    if (locations.length > 1) {
-                        const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lng]));
-                        map.fitBounds(bounds, { padding: [50, 50] });
                     }
                 }
                 
@@ -595,6 +652,7 @@ app.get('/', (req, res) => {
 app.get('/location', (req, res) => {
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
+    const wearing = req.query.wearing === 'true';
     
     if (isNaN(lat) || isNaN(lng)) {
         return res.status(400).json({
@@ -606,6 +664,7 @@ app.get('/location', (req, res) => {
     const locationEntry = {
         lat: lat,
         lng: lng,
+        wearing: wearing,
         timestamp: new Date().toLocaleString('tr-TR', { 
             timeZone: 'Europe/Istanbul',
             year: 'numeric',
@@ -619,7 +678,7 @@ app.get('/location', (req, res) => {
     
     locationData.push(locationEntry);
     
-    console.log(`📍 Konum alındı: Enlem ${lat}, Boylam ${lng} - Toplam: ${locationData.length}`);
+    console.log(`📍 Konum alındı: Enlem ${lat}, Boylam ${lng}, Giyildi: ${wearing ? 'Evet' : 'Hayır'} - Toplam: ${locationData.length}`);
     
     res.json({
         success: true,
@@ -633,6 +692,7 @@ app.get('/location', (req, res) => {
 app.post('/location', (req, res) => {
     const lat = parseFloat(req.body.lat || req.query.lat);
     const lng = parseFloat(req.body.lng || req.query.lng);
+    const wearing = (req.body.wearing || req.query.wearing) === 'true';
     
     if (isNaN(lat) || isNaN(lng)) {
         return res.status(400).json({
@@ -644,6 +704,7 @@ app.post('/location', (req, res) => {
     const locationEntry = {
         lat: lat,
         lng: lng,
+        wearing: wearing,
         timestamp: new Date().toLocaleString('tr-TR', { 
             timeZone: 'Europe/Istanbul',
             year: 'numeric',
@@ -657,7 +718,7 @@ app.post('/location', (req, res) => {
     
     locationData.push(locationEntry);
     
-    console.log(`📍 Konum alındı: Enlem ${lat}, Boylam ${lng} - Toplam: ${locationData.length}`);
+    console.log(`📍 Konum alındı: Enlem ${lat}, Boylam ${lng}, Giyildi: ${wearing ? 'Evet' : 'Hayır'} - Toplam: ${locationData.length}`);
     
     res.json({
         success: true,
