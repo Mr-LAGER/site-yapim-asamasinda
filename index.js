@@ -1,28 +1,27 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-
+const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
+// Gelen JSON verilerini okuyabilmek için middleware
+app.use(express.json());
 
-// Ana sayfa (test)
-app.get("/", (req, res) => {
-  res.send("Deneyap Sunucusu Calisiyor!");
+// Veriyi alacağımız ana endpoint
+app.post('/veri-al', (req, res) => {
+    const gelenVeri = req.body;
+    
+    console.log("--------------------------------");
+    console.log("Deneyap Kart'tan veri geldi!");
+    console.log("Gelen İçerik:", gelenVeri);
+    console.log("--------------------------------");
+
+    // Deneyap Kart'a başarılı olduğuna dair yanıt dönüyoruz
+    res.status(200).json({
+        mesaj: "Veri başarıyla alındı",
+        alinan_deger: gelenVeri.deger
+    });
 });
 
-// Deneyap Kart veri endpointi
-app.post("/api/veri-gonder", (req, res) => {
-  const veri = req.body;
-
-  console.log("================================");
-  console.log("YENI VERI GELDI:");
-  console.log(veri);
-  console.log("================================");
-
-  res.status(200).json({ durum: "OK" });
-});
-
+// Sunucuyu başlat
 app.listen(PORT, () => {
-  console.log(`Sunucu ${PORT} portunda calisiyor`);
+    console.log(`Sunucu ${PORT} portunda aktif. Deneyap Kart bekleniyor...`);
 });
