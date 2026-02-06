@@ -14,11 +14,322 @@ app.use((req, res, next) => {
     next();
 });
 
-// Gelen konum verilerini saklamak için array
+/************ GÜVENLİK SİSTEMİ ************/
+
+// Şifre yönetimi
+let validPasswords = ['251900', '3850', 'TÜBİTAK'];
+
+// DDoS koruması - IP bazlı rate limiting
+const ipRequestTracker = new Map();
+const bannedIPs = new Map();
+
+const RATE_LIMIT = {
+    maxRequests: 100,        // Maksimum istek sayısı
+    windowMs: 1000,          // Zaman penceresi (1 saniye)
+    banDuration: 300000      // Ban süresi (5 dakika)
+};
+
+// Rate limiting middleware
+function rateLimiter(req, res, next) {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    
+    // Banlı IP kontrolü
+    if (bannedIPs.has(ip)) {
+        const banInfo = bannedIPs.get(ip);
+        if (now < banInfo.until) {
+            const remainingTime = Math.ceil((banInfo.until - now) / 1000);
+            return res.status(429).json({
+                success: false,
+                message: `IP adresiniz geçici olarak engellenmiştir`,
+                remainingTime: remainingTime,
+                reason: 'Çok fazla istek'
+            });
+        } else {
+            // Ban süresi doldu, temizle
+            bannedIPs.delete(ip);
+            ipRequestTracker.delete(ip);
+        }
+    }
+    
+    // İstek sayısını izle
+    if (!ipRequestTracker.has(ip)) {
+        ipRequestTracker.set(ip, {
+            requests: [],
+            warnings: 0
+        });
+    }
+    
+    const tracker = ipRequestTracker.get(ip);
+    
+    // Eski istekleri temizle (1 saniyeden eski olanlar)
+    tracker.requests = tracker.requests.filter(time => now - time < RATE_LIMIT.windowMs);
+    
+    // Yeni isteği ekle
+    tracker.requests.push(now);
+    
+    // Rate limit kontrolü
+    if (tracker.requests.length > RATE_LIMIT.maxRequests) {
+        // IP'yi banla
+        bannedIPs.set(ip, {
+            until: now + RATE_LIMIT.banDuration,
+            bannedAt: now,
+            requestCount: tracker.requests.length
+        });
+        
+        console.log(`🚫 IP BANLANDI: ${ip} (${tracker.requests.length} istek/saniye)`);
+        
+        return res.status(429).json({
+            success: false,
+            message: 'Çok fazla istek gönderdiniz. IP adresiniz 5 dakika engellenmiştir.',
+            bannedUntil: new Date(now + RATE_LIMIT.banDuration).toISOString()
+        });
+    }
+    
+    next();
+}
+
+// Tüm endpoint'lere rate limiting uygula
+app.use(rateLimiter);
+
+// Session yönetimi (basit cookie tabanlı)
+const activeSessions = new Map();
+
+function generateSessionId() {
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+
+function isAuthenticated(req) {
+    const sessionId = req.headers['x-session-id'] || req.query.session || req.cookies?.session;
+    if (!sessionId) return false;
+    
+    const session = activeSessions.get(sessionId);
+    if (!session) return false;
+    
+    // Session süresi dolmuş mu? (24 saat)
+    if (Date.now() - session.createdAt > 24 * 60 * 60 * 1000) {
+        activeSessions.delete(sessionId);
+        return false;
+    }
+    
+    return true;
+}
+
+/************ KONUM VERİLERİ ************/
 let locationData = [];
 
-// Admin paneli sayfası
+/************ GİRİŞ SAYFASI ************/
+app.get('/login', (req, res) => {
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Giriş - Deneyap Takip Sistemi</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+                .login-container {
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    padding: 50px;
+                    max-width: 450px;
+                    width: 100%;
+                    text-align: center;
+                }
+                .logo {
+                    font-size: 4em;
+                    margin-bottom: 20px;
+                }
+                h1 {
+                    color: #333;
+                    margin-bottom: 10px;
+                    font-size: 2em;
+                }
+                .subtitle {
+                    color: #666;
+                    margin-bottom: 40px;
+                    font-size: 1.1em;
+                }
+                .input-group {
+                    margin-bottom: 25px;
+                    text-align: left;
+                }
+                label {
+                    display: block;
+                    color: #555;
+                    margin-bottom: 8px;
+                    font-weight: 500;
+                }
+                input[type="password"] {
+                    width: 100%;
+                    padding: 15px;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 10px;
+                    font-size: 1.1em;
+                    transition: all 0.3s ease;
+                }
+                input[type="password"]:focus {
+                    outline: none;
+                    border-color: #667eea;
+                    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+                }
+                .btn-login {
+                    width: 100%;
+                    padding: 15px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                .btn-login:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+                }
+                .error-message {
+                    background: #fee;
+                    color: #c33;
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    display: none;
+                }
+                .info-box {
+                    background: #f0f4ff;
+                    padding: 15px;
+                    border-radius: 10px;
+                    margin-top: 25px;
+                    color: #555;
+                    font-size: 0.9em;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="login-container">
+                <div class="logo">🔐</div>
+                <h1>Deneyap Takip Sistemi</h1>
+                <p class="subtitle">Güvenli Giriş</p>
+                
+                <div class="error-message" id="errorMsg"></div>
+                
+                <form id="loginForm">
+                    <div class="input-group">
+                        <label>Erişim Şifresi</label>
+                        <input type="password" id="password" placeholder="Şifrenizi girin" required autofocus>
+                    </div>
+                    
+                    <button type="submit" class="btn-login">🚀 Giriş Yap</button>
+                </form>
+                
+                <div class="info-box">
+                    🛡️ Bu sistem DDoS korumalıdır<br>
+                    ⚡ Saniyede 100+ istek = 5 dakika ban
+                </div>
+            </div>
+            
+            <script>
+                document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const password = document.getElementById('password').value;
+                    const errorMsg = document.getElementById('errorMsg');
+                    
+                    try {
+                        const response = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            // Session ID'yi kaydet
+                            localStorage.setItem('sessionId', result.sessionId);
+                            // Ana sayfaya yönlendir
+                            window.location.href = '/?session=' + result.sessionId;
+                        } else {
+                            errorMsg.textContent = '❌ ' + result.message;
+                            errorMsg.style.display = 'block';
+                            document.getElementById('password').value = '';
+                        }
+                    } catch (error) {
+                        errorMsg.textContent = '❌ Bağlantı hatası';
+                        errorMsg.style.display = 'block';
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+/************ API: LOGIN ************/
+app.post('/api/login', (req, res) => {
+    const { password } = req.body;
+    
+    if (validPasswords.includes(password)) {
+        const sessionId = generateSessionId();
+        activeSessions.set(sessionId, {
+            createdAt: Date.now(),
+            password: password
+        });
+        
+        console.log(`✅ Başarılı giriş: ${password}`);
+        
+        res.json({
+            success: true,
+            message: 'Giriş başarılı',
+            sessionId: sessionId
+        });
+    } else {
+        console.log(`❌ Başarısız giriş denemesi: ${password}`);
+        res.status(401).json({
+            success: false,
+            message: 'Geçersiz şifre'
+        });
+    }
+});
+
+/************ API: LOGOUT ************/
+app.post('/api/logout', (req, res) => {
+    const sessionId = req.headers['x-session-id'] || req.body.sessionId;
+    if (sessionId) {
+        activeSessions.delete(sessionId);
+    }
+    res.json({ success: true, message: 'Çıkış yapıldı' });
+});
+
+/************ ADMIN PANELİ ************/
 app.get('/admin', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.redirect('/login');
+    }
+    
+    const bannedIPsList = Array.from(bannedIPs.entries()).map(([ip, info]) => ({
+        ip,
+        until: new Date(info.until).toLocaleString('tr-TR'),
+        remaining: Math.max(0, Math.ceil((info.until - Date.now()) / 1000))
+    }));
+    
     res.send(`
         <!DOCTYPE html>
         <html lang="tr">
@@ -39,7 +350,7 @@ app.get('/admin', (req, res) => {
                     padding: 20px;
                 }
                 .container {
-                    max-width: 800px;
+                    max-width: 1200px;
                     margin: 0 auto;
                     background: white;
                     border-radius: 20px;
@@ -50,116 +361,42 @@ app.get('/admin', (req, res) => {
                     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
                     color: white;
                     padding: 30px;
-                    text-align: center;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
                 }
                 .header h1 {
-                    font-size: 2.5em;
-                    margin-bottom: 10px;
-                    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+                    font-size: 2em;
+                }
+                .logout-btn {
+                    background: rgba(255,255,255,0.2);
+                    color: white;
+                    border: 2px solid white;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: all 0.3s ease;
+                }
+                .logout-btn:hover {
+                    background: white;
+                    color: #dc3545;
                 }
                 .content {
                     padding: 40px;
                 }
-                .info-box {
-                    background: #f8f9fa;
-                    padding: 20px;
-                    border-radius: 10px;
-                    margin-bottom: 20px;
-                    border-left: 4px solid #667eea;
-                }
-                .info-box h3 {
-                    color: #333;
-                    margin-bottom: 10px;
-                }
-                .info-box p {
-                    color: #666;
-                    line-height: 1.6;
-                }
-                .endpoint-box {
-                    background: #fff;
-                    border: 2px solid #e9ecef;
-                    padding: 20px;
-                    border-radius: 10px;
-                    margin-bottom: 20px;
-                }
-                .endpoint-box h4 {
-                    color: #667eea;
-                    margin-bottom: 15px;
-                    font-size: 1.2em;
-                }
-                .method {
-                    display: inline-block;
-                    padding: 5px 15px;
-                    border-radius: 5px;
-                    font-weight: bold;
-                    margin-right: 10px;
-                    font-size: 0.9em;
-                }
-                .method-get {
-                    background: #28a745;
-                    color: white;
-                }
-                .method-post {
-                    background: #007bff;
-                    color: white;
-                }
-                .method-delete {
-                    background: #dc3545;
-                    color: white;
-                }
-                .url-box {
-                    background: #f8f9fa;
-                    padding: 10px 15px;
-                    border-radius: 5px;
-                    margin: 10px 0;
-                    font-family: 'Courier New', monospace;
-                    font-size: 0.9em;
-                    word-break: break-all;
-                }
-                .btn {
-                    padding: 12px 30px;
-                    border: none;
-                    border-radius: 8px;
-                    font-size: 1em;
-                    font-weight: bold;
-                    cursor: pointer;
-                    transition: all 0.3s ease;
-                    margin: 10px 5px;
-                }
-                .btn-primary {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                }
-                .btn-danger {
-                    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-                    color: white;
-                }
-                .btn-success {
-                    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-                    color: white;
-                }
-                .btn:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                }
-                .action-section {
-                    background: #fff3cd;
-                    padding: 20px;
-                    border-radius: 10px;
-                    border: 2px solid #ffc107;
-                    margin-top: 30px;
-                }
-                .action-section h3 {
-                    color: #856404;
-                    margin-bottom: 15px;
+                .stats-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 40px;
                 }
                 .stat-card {
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
-                    padding: 20px;
-                    border-radius: 10px;
+                    padding: 25px;
+                    border-radius: 15px;
                     text-align: center;
-                    margin-bottom: 20px;
                 }
                 .stat-value {
                     font-size: 3em;
@@ -170,15 +407,109 @@ app.get('/admin', (req, res) => {
                     font-size: 1.1em;
                     opacity: 0.9;
                 }
-                .example-code {
-                    background: #2d2d2d;
-                    color: #f8f8f2;
+                .section {
+                    background: #f8f9fa;
+                    padding: 25px;
+                    border-radius: 15px;
+                    margin-bottom: 25px;
+                }
+                .section h3 {
+                    color: #333;
+                    margin-bottom: 20px;
+                    font-size: 1.5em;
+                }
+                .password-list {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-bottom: 20px;
+                }
+                .password-item {
+                    background: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    border: 2px solid #e0e0e0;
+                }
+                .password-text {
+                    font-weight: bold;
+                    color: #333;
+                }
+                .btn-remove {
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    padding: 5px 12px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 0.9em;
+                }
+                .btn-remove:hover {
+                    background: #c82333;
+                }
+                .input-group {
+                    display: flex;
+                    gap: 10px;
+                    margin-top: 15px;
+                }
+                .input-group input {
+                    flex: 1;
+                    padding: 12px;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    font-size: 1em;
+                }
+                .btn-add {
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 12px 25px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                }
+                .btn-add:hover {
+                    background: #218838;
+                }
+                .btn-primary {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    padding: 12px 25px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    margin: 5px;
+                }
+                .btn-primary:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                }
+                .banned-ip-item {
+                    background: white;
                     padding: 15px;
                     border-radius: 8px;
-                    margin: 10px 0;
-                    font-family: 'Courier New', monospace;
-                    font-size: 0.85em;
-                    overflow-x: auto;
+                    margin-bottom: 10px;
+                    border-left: 4px solid #dc3545;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: white;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                th, td {
+                    padding: 12px;
+                    text-align: left;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                th {
+                    background: #f8f9fa;
+                    font-weight: bold;
+                    color: #333;
                 }
             </style>
         </head>
@@ -186,117 +517,129 @@ app.get('/admin', (req, res) => {
             <div class="container">
                 <div class="header">
                     <h1>🔧 Admin Paneli</h1>
-                    <p>API Endpoint'leri ve Yönetim</p>
+                    <button class="logout-btn" onclick="logout()">🚪 Çıkış Yap</button>
                 </div>
                 
                 <div class="content">
-                    <div class="stat-card">
-                        <div class="stat-value">${locationData.length}</div>
-                        <div class="stat-label">Toplam Kayıtlı Konum</div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${locationData.length}</div>
+                            <div class="stat-label">Toplam Konum</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${validPasswords.length}</div>
+                            <div class="stat-label">Aktif Şifre</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${bannedIPs.size}</div>
+                            <div class="stat-label">Banlı IP</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${activeSessions.size}</div>
+                            <div class="stat-label">Aktif Oturum</div>
+                        </div>
                     </div>
                     
-                    <div class="info-box">
-                        <h3>📋 Hızlı Linkler</h3>
-                        <button class="btn btn-primary" onclick="window.location.href='/'">🗺️ Harita Görünümü</button>
-                        <button class="btn btn-success" onclick="window.location.href='/all-locations'">📊 Tüm Veriler (JSON)</button>
+                    <div class="section">
+                        <h3>🔑 Şifre Yönetimi</h3>
+                        <div class="password-list" id="passwordList">
+                            ${validPasswords.map(pwd => `
+                                <div class="password-item">
+                                    <span class="password-text">🔐 ${pwd}</span>
+                                    <button class="btn-remove" onclick="removePassword('${pwd}')">❌</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="newPassword" placeholder="Yeni şifre ekle...">
+                            <button class="btn-add" onclick="addPassword()">➕ Ekle</button>
+                        </div>
                     </div>
                     
-                    <div class="endpoint-box">
-                        <h4>📍 Konum Gönderme (GET)</h4>
-                        <span class="method method-get">GET</span>
-                        <div class="url-box">${req.protocol}://${req.get('host')}/location?lat=39.9334&lng=32.8597</div>
-                        <p><strong>Kullanım:</strong> Tarayıcıda veya Arduino'dan GET isteği ile</p>
+                    <div class="section">
+                        <h3>🚫 Banlı IP Adresleri</h3>
+                        ${bannedIPsList.length > 0 ? `
+                            <table>
+                                <tr>
+                                    <th>IP Adresi</th>
+                                    <th>Ban Bitiş</th>
+                                    <th>Kalan Süre</th>
+                                </tr>
+                                ${bannedIPsList.map(ban => `
+                                    <tr>
+                                        <td>${ban.ip}</td>
+                                        <td>${ban.until}</td>
+                                        <td>${ban.remaining} saniye</td>
+                                    </tr>
+                                `).join('')}
+                            </table>
+                        ` : '<p>🎉 Banlı IP adresi yok</p>'}
                     </div>
                     
-                    <div class="endpoint-box">
-                        <h4>📍 Konum Gönderme (POST)</h4>
-                        <span class="method method-post">POST</span>
-                        <div class="url-box">${req.protocol}://${req.get('host')}/location</div>
-                        <p><strong>Body (JSON):</strong></p>
-                        <div class="example-code">{
-  "lat": 39.9334,
-  "lng": 32.8597
-}</div>
-                        <p><strong>Kullanım:</strong> Postman veya cURL ile POST isteği</p>
-                        <div class="example-code">curl -X POST ${req.protocol}://${req.get('host')}/location \\
-  -H "Content-Type: application/json" \\
-  -d '{"lat":39.9334,"lng":32.8597}'</div>
-                    </div>
-                    
-                    <div class="endpoint-box">
-                        <h4>🗑️ Tek Konum Silme</h4>
-                        <span class="method method-delete">DELETE</span>
-                        <div class="url-box">${req.protocol}://${req.get('host')}/delete-location/{index}</div>
-                        <p><strong>Kullanım:</strong> Haritada marker'a tıklayıp çarpı butonuna basın, veya:</p>
-                        <div class="example-code">curl -X DELETE ${req.protocol}://${req.get('host')}/delete-location/0</div>
-                        <p><small>* index: 0'dan başlar (ilk konum = 0, ikinci = 1, vs.)</small></p>
-                    </div>
-                    
-                    <div class="endpoint-box">
-                        <h4>🗑️ Tüm Konumları Temizle</h4>
-                        <span class="method method-delete">DELETE</span>
-                        <div class="url-box">${req.protocol}://${req.get('host')}/clear</div>
-                        <p><strong>Kullanım - Tarayıcı Console'da (F12):</strong></p>
-                        <div class="example-code">fetch('${req.protocol}://${req.get('host')}/clear', {method: 'DELETE'})
-  .then(r => r.json())
-  .then(d => {
-    console.log(d);
-    alert('Tüm konumlar silindi!');
-    location.reload();
-  });</div>
-                        <p><strong>Veya cURL ile:</strong></p>
-                        <div class="example-code">curl -X DELETE ${req.protocol}://${req.get('host')}/clear</div>
-                    </div>
-                    
-                    <div class="action-section">
-                        <h3>⚠️ Tehlikeli İşlemler</h3>
-                        <p style="color: #856404; margin-bottom: 15px;">
-                            Bu buton tüm konum verilerini kalıcı olarak silecektir. Bu işlem geri alınamaz!
-                        </p>
-                        <button class="btn btn-danger" onclick="clearAllLocations()">
-                            🗑️ TÜM KONUMLARI SİL
-                        </button>
-                    </div>
-                    
-                    <div class="info-box" style="margin-top: 30px; border-left-color: #28a745;">
-                        <h3>✅ Endpoint Testi</h3>
-                        <p>Tarayıcınızın console'unu açın (F12) ve şu komutu yapıştırın:</p>
-                        <div class="example-code">// Konum gönder
-fetch('${req.protocol}://${req.get('host')}/location?lat=41.0082&lng=28.9784')
-  .then(r => r.json())
-  .then(d => console.log('✅ Başarılı:', d));
-
-// Tüm konumları getir
-fetch('${req.protocol}://${req.get('host')}/all-locations')
-  .then(r => r.json())
-  .then(d => console.log('📊 Tüm konumlar:', d));</div>
+                    <div class="section">
+                        <h3>📋 Hızlı Erişim</h3>
+                        <button class="btn-primary" onclick="window.location.href='/?session=${req.query.session}'">🗺️ Harita Görünümü</button>
+                        <button class="btn-primary" onclick="window.location.href='/all-locations?session=${req.query.session}'">📊 Tüm Veriler</button>
                     </div>
                 </div>
             </div>
             
             <script>
-                async function clearAllLocations() {
-                    const confirmation = prompt('Tüm konumları silmek için "" yazın:');
-                    
-                    if (confirmation === '') {
-                        try {
-                            const response = await fetch('/clear', {
-                                method: 'DELETE'
-                            });
-                            const result = await response.json();
-                            
-                            if (result.success) {
-                                alert('✅ ' + result.message);
-                                location.reload();
-                            } else {
-                                alert('❌ Hata: ' + result.message);
-                            }
-                        } catch (error) {
-                            alert('❌ İşlem hatası: ' + error.message);
-                        }
-                    } else if (confirmation !== null) {
-                        alert('❌ İptal edildi. "SIL" yazmanız gerekiyor.');
+                const sessionId = '${req.query.session}';
+                
+                async function addPassword() {
+                    const password = document.getElementById('newPassword').value.trim();
+                    if (!password) {
+                        alert('❌ Şifre boş olamaz');
+                        return;
                     }
+                    
+                    const response = await fetch('/api/admin/add-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        },
+                        body: JSON.stringify({ password })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        location.reload();
+                    } else {
+                        alert('❌ ' + result.message);
+                    }
+                }
+                
+                async function removePassword(password) {
+                    if (!confirm('Bu şifreyi silmek istediğinizden emin misiniz?')) return;
+                    
+                    const response = await fetch('/api/admin/remove-password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        },
+                        body: JSON.stringify({ password })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        location.reload();
+                    } else {
+                        alert('❌ ' + result.message);
+                    }
+                }
+                
+                async function logout() {
+                    await fetch('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        }
+                    });
+                    window.location.href = '/login';
                 }
             </script>
         </body>
@@ -304,8 +647,57 @@ fetch('${req.protocol}://${req.get('host')}/all-locations')
     `);
 });
 
-// Ana sayfa - Harita ile konum gösterimi
+/************ API: ŞİFRE EKLE ************/
+app.post('/api/admin/add-password', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
+    }
+    
+    const { password } = req.body;
+    
+    if (!password || password.trim() === '') {
+        return res.status(400).json({ success: false, message: 'Şifre boş olamaz' });
+    }
+    
+    if (validPasswords.includes(password)) {
+        return res.status(400).json({ success: false, message: 'Bu şifre zaten mevcut' });
+    }
+    
+    validPasswords.push(password);
+    console.log(`➕ Yeni şifre eklendi: ${password}`);
+    
+    res.json({ success: true, message: 'Şifre başarıyla eklendi' });
+});
+
+/************ API: ŞİFRE SİL ************/
+app.post('/api/admin/remove-password', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
+    }
+    
+    const { password } = req.body;
+    
+    if (validPasswords.length <= 1) {
+        return res.status(400).json({ success: false, message: 'En az bir şifre olmalı' });
+    }
+    
+    const index = validPasswords.indexOf(password);
+    if (index === -1) {
+        return res.status(400).json({ success: false, message: 'Şifre bulunamadı' });
+    }
+    
+    validPasswords.splice(index, 1);
+    console.log(`➖ Şifre silindi: ${password}`);
+    
+    res.json({ success: true, message: 'Şifre başarıyla silindi' });
+});
+
+/************ ANA SAYFA ************/
 app.get('/', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.redirect('/login');
+    }
+    
     const lastLocation = locationData.length > 0 ? locationData[locationData.length - 1] : null;
     
     res.send(`
@@ -342,6 +734,7 @@ app.get('/', (req, res) => {
                     color: white;
                     padding: 30px;
                     text-align: center;
+                    position: relative;
                 }
                 .header h1 {
                     font-size: 2.5em;
@@ -351,6 +744,23 @@ app.get('/', (req, res) => {
                 .header p {
                     font-size: 1.1em;
                     opacity: 0.9;
+                }
+                .logout-btn-header {
+                    position: absolute;
+                    top: 30px;
+                    right: 30px;
+                    background: rgba(255,255,255,0.2);
+                    color: white;
+                    border: 2px solid white;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    transition: all 0.3s ease;
+                }
+                .logout-btn-header:hover {
+                    background: white;
+                    color: #667eea;
                 }
                 .stats {
                     display: grid;
@@ -432,6 +842,7 @@ app.get('/', (req, res) => {
                     cursor: pointer;
                     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
                     transition: all 0.3s ease;
+                    z-index: 1000;
                 }
                 .refresh-btn:hover {
                     transform: translateY(-3px);
@@ -455,6 +866,7 @@ app.get('/', (req, res) => {
         <body>
             <div class="container">
                 <div class="header">
+                    <button class="logout-btn-header" onclick="logout()">🚪 Çıkış</button>
                     <h1>📍 Deneyap Kart Konum Takip</h1>
                     <p><span class="live-indicator"></span>Gerçek Zamanlı Konum İzleme</p>
                 </div>
@@ -472,9 +884,9 @@ app.get('/', (req, res) => {
                         <div class="stat-value">${lastLocation ? lastLocation.lng.toFixed(6) : '-'}</div>
                         <div class="stat-label">Son Boylam</div>
                     </div>
-                    <div class="stat-card" style="background: ${lastLocation && lastLocation.wearing ? 'linear-gradient(135deg, #28a745 0%, #218838 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'};">
-                        <div class="stat-value">${lastLocation ? (lastLocation.wearing ? '✅' : '❌') : '-'}</div>
-                        <div class="stat-label">Giyilme Durumu</div>
+                    <div class="stat-card" style="background: ${lastLocation && lastLocation.wearing ? 'linear-gradient(135deg, #28a745 0%, #218838 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'}; color: white;">
+                        <div class="stat-value" style="color: white;">${lastLocation ? (lastLocation.wearing ? '✅' : '❌') : '-'}</div>
+                        <div class="stat-label" style="color: white;">Giyilme Durumu</div>
                     </div>
                 </div>
                 
@@ -504,27 +916,23 @@ app.get('/', (req, res) => {
             <button class="refresh-btn" onclick="location.reload()">🔄 Yenile</button>
             
             <script>
-                // Harita başlatma
+                const sessionId = '${req.query.session}';
+                
                 const map = L.map('map').setView([${lastLocation ? lastLocation.lat : 39.9334}, ${lastLocation ? lastLocation.lng : 32.8597}], ${lastLocation ? 13 : 6});
                 
-                // OpenStreetMap tile layer
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap contributors',
                     maxZoom: 19
                 }).addTo(map);
                 
-                // Tüm konumları haritaya ekle
                 let locations = ${JSON.stringify(locationData)};
                 let markers = [];
                 
-                // Marker'ları çizme fonksiyonu
                 function drawMarkers() {
-                    // Eski marker'ları temizle
                     markers.forEach(marker => map.removeLayer(marker));
                     markers = [];
                     
                     if (locations.length > 0) {
-                        // Marker'ları ekle
                         locations.forEach((loc, index) => {
                             const marker = L.marker([loc.lat, loc.lng]).addTo(map);
                             markers.push(marker);
@@ -566,23 +974,18 @@ app.get('/', (req, res) => {
                                             cursor: pointer;
                                             font-weight: bold;
                                             font-size: 0.9em;
-                                            transition: all 0.3s ease;
                                         "
-                                        onmouseover="this.style.background='#c82333'"
-                                        onmouseout="this.style.background='#dc3545'"
                                     >
                                         ❌ Bu Konumu Sil
                                     </button>
                                 </div>
                             \`);
                             
-                            // Son konum için popup'ı aç
                             if (index === locations.length - 1) {
                                 marker.openPopup();
                             }
                         });
                         
-                        // Tüm marker'ları gösterecek şekilde zoom ayarla
                         if (locations.length > 1) {
                             const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lng]));
                             map.fitBounds(bounds, { padding: [50, 50] });
@@ -590,57 +993,34 @@ app.get('/', (req, res) => {
                     }
                 }
                 
-                // İlk çizim
                 drawMarkers();
                 
-                // Konum silme fonksiyonu (SAYFA YENİLEME OLMADAN)
                 async function deleteLocation(index) {
                     if (confirm('Bu konumu silmek istediğinizden emin misiniz?')) {
-                        try {
-                            const response = await fetch('/delete-location/' + index, {
-                                method: 'DELETE'
-                            });
-                            const result = await response.json();
-                            
-                            if (result.success) {
-                                // Başarılı silme - listeyi güncelle
-                                locations.splice(index, 1);
-                                
-                                // Haritayı yeniden çiz
-                                drawMarkers();
-                                
-                                // Başarı mesajı
-                                const notification = document.createElement('div');
-                                notification.style.cssText = \`
-                                    position: fixed;
-                                    top: 20px;
-                                    right: 20px;
-                                    background: #28a745;
-                                    color: white;
-                                    padding: 15px 25px;
-                                    border-radius: 10px;
-                                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                                    z-index: 10000;
-                                    font-weight: bold;
-                                \`;
-                                notification.textContent = '✅ Konum silindi!';
-                                document.body.appendChild(notification);
-                                
-                                setTimeout(() => {
-                                    notification.remove();
-                                    // 2 saniye sonra sayfayı yenile (istatistikleri güncellemek için)
-                                    location.reload();
-                                }, 2000);
-                            } else {
-                                alert('❌ Hata: ' + result.message);
-                            }
-                        } catch (error) {
-                            alert('❌ Silme hatası: ' + error.message);
+                        const response = await fetch('/delete-location/' + index + '?session=' + sessionId, {
+                            method: 'DELETE'
+                        });
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            locations.splice(index, 1);
+                            drawMarkers();
+                            setTimeout(() => location.reload(), 1000);
                         }
                     }
                 }
                 
-                // Otomatik yenileme (30 saniyede bir)
+                async function logout() {
+                    await fetch('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        }
+                    });
+                    window.location.href = '/login';
+                }
+                
                 setTimeout(() => location.reload(), 30000);
             </script>
         </body>
@@ -648,7 +1028,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Konum verisi alma endpoint'i (GET)
+/************ KONUM ALMA (GET) ************/
 app.get('/location', (req, res) => {
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
@@ -678,7 +1058,7 @@ app.get('/location', (req, res) => {
     
     locationData.push(locationEntry);
     
-    console.log(`📍 Konum alındı: Enlem ${lat}, Boylam ${lng}, Giyildi: ${wearing ? 'Evet' : 'Hayır'} - Toplam: ${locationData.length}`);
+    console.log(`📍 Konum alındı: ${lat}, ${lng} | Giyildi: ${wearing ? 'Evet' : 'Hayır'} - Toplam: ${locationData.length}`);
     
     res.json({
         success: true,
@@ -688,48 +1068,12 @@ app.get('/location', (req, res) => {
     });
 });
 
-// Konum verisi alma endpoint'i (POST)
-app.post('/location', (req, res) => {
-    const lat = parseFloat(req.body.lat || req.query.lat);
-    const lng = parseFloat(req.body.lng || req.query.lng);
-    const wearing = (req.body.wearing || req.query.wearing) === 'true';
-    
-    if (isNaN(lat) || isNaN(lng)) {
-        return res.status(400).json({
-            success: false,
-            message: 'Geçersiz enlem veya boylam değeri'
-        });
+/************ TÜM KONUMLAR ************/
+app.get('/all-locations', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
     }
     
-    const locationEntry = {
-        lat: lat,
-        lng: lng,
-        wearing: wearing,
-        timestamp: new Date().toLocaleString('tr-TR', { 
-            timeZone: 'Europe/Istanbul',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        })
-    };
-    
-    locationData.push(locationEntry);
-    
-    console.log(`📍 Konum alındı: Enlem ${lat}, Boylam ${lng}, Giyildi: ${wearing ? 'Evet' : 'Hayır'} - Toplam: ${locationData.length}`);
-    
-    res.json({
-        success: true,
-        message: 'Konum başarıyla kaydedildi',
-        location: locationEntry,
-        totalLocations: locationData.length
-    });
-});
-
-// Tüm konumları getir
-app.get('/all-locations', (req, res) => {
     res.json({
         success: true,
         totalLocations: locationData.length,
@@ -737,8 +1081,12 @@ app.get('/all-locations', (req, res) => {
     });
 });
 
-// Tek konum silme endpoint'i
+/************ TEK KONUM SİL ************/
 app.delete('/delete-location/:index', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
+    }
+    
     const index = parseInt(req.params.index);
     
     if (isNaN(index) || index < 0 || index >= locationData.length) {
@@ -750,7 +1098,7 @@ app.delete('/delete-location/:index', (req, res) => {
     
     const deletedLocation = locationData.splice(index, 1)[0];
     
-    console.log(`🗑️ Konum silindi: Enlem ${deletedLocation.lat}, Boylam ${deletedLocation.lng}`);
+    console.log(`🗑️ Konum silindi: ${deletedLocation.lat}, ${deletedLocation.lng}`);
     
     res.json({
         success: true,
@@ -760,8 +1108,12 @@ app.delete('/delete-location/:index', (req, res) => {
     });
 });
 
-// Tüm konumları temizle
+/************ TÜM KONUMLARI TEMİZLE ************/
 app.delete('/clear', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
+    }
+    
     const count = locationData.length;
     locationData = [];
     
@@ -773,28 +1125,37 @@ app.delete('/clear', (req, res) => {
     });
 });
 
-// Health check endpoint
+/************ HEALTH CHECK ************/
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'Endpoint bulunamadı',
-        availableEndpoints: [
-            'GET /',
-            'GET /location?lat=39.9334&lng=32.8597',
-            'POST /location',
-            'GET /all-locations',
-            'DELETE /clear'
-        ]
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        bannedIPs: bannedIPs.size,
+        activeSessions: activeSessions.size
     });
 });
 
-// Server'ı başlat
+/************ 404 HANDLER ************/
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Endpoint bulunamadı'
+    });
+});
+
+/************ SERVER BAŞLAT ************/
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server çalışıyor: http://0.0.0.0:${PORT}`);
-    console.log(`📍 Konum göndermek için: /location?lat=39.9334&lng=32.8597`);
+    console.log('╔════════════════════════════════════════╗');
+    console.log('║  🚀 Deneyap Kart Takip Sistemi       ║');
+    console.log('╠════════════════════════════════════════╣');
+    console.log(`║  📡 Server: http://0.0.0.0:${PORT.toString().padEnd(19)}║`);
+    console.log('║  🔐 Giriş: /login                     ║');
+    console.log('║  🛡️  DDoS Koruması: Aktif             ║');
+    console.log('║  ⚡ Rate Limit: 100 istek/saniye      ║');
+    console.log('║  ⏰ Ban Süresi: 5 dakika              ║');
+    console.log('╚════════════════════════════════════════╝');
+    console.log('');
+    console.log('🔑 Varsayılan Şifreler:');
+    validPasswords.forEach(pwd => console.log(`   - ${pwd}`));
+    console.log('');
 });
