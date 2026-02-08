@@ -22,7 +22,7 @@ let validPasswords = ['251900', '3850', 'TÜBİTAK'];
 // DDoS koruması - IP bazlı rate limiting
 const ipRequestTracker = new Map();
 const bannedIPs = new Map();
-const manuallyBannedIPs = new Set(); // Manuel olarak banlanan IP'ler
+const visitorIPs = new Map(); // Siteye giren IP'leri takip et
 
 const RATE_LIMIT = {
     maxRequests: 100,        // Maksimum istek sayısı
@@ -30,36 +30,25 @@ const RATE_LIMIT = {
     banDuration: 300000      // Ban süresi (5 dakika)
 };
 
-// Tüm ziyaretçi IP'lerini takip et
-const visitorIPs = new Map();
-
 // Rate limiting middleware
 function rateLimiter(req, res, next) {
     const ip = req.ip || req.connection.remoteAddress;
     const now = Date.now();
     
-    // IP'yi ziyaretçi listesine ekle
+    // Ziyaretçi IP'sini kaydet
     if (!visitorIPs.has(ip)) {
         visitorIPs.set(ip, {
-            firstSeen: now,
-            lastSeen: now,
-            requestCount: 0
+            firstVisit: now,
+            lastVisit: now,
+            visitCount: 1
         });
-    }
-    const visitor = visitorIPs.get(ip);
-    visitor.lastSeen = now;
-    visitor.requestCount++;
-    
-    // Manuel ban kontrolü
-    if (manuallyBannedIPs.has(ip)) {
-        return res.status(403).json({
-            success: false,
-            message: 'IP adresiniz kalıcı olarak engellenmiştir',
-            reason: 'Manuel ban'
-        });
+    } else {
+        const visitor = visitorIPs.get(ip);
+        visitor.lastVisit = now;
+        visitor.visitCount++;
     }
     
-    // Otomatik banlı IP kontrolü
+    // Banlı IP kontrolü
     if (bannedIPs.has(ip)) {
         const banInfo = bannedIPs.get(ip);
         if (now < banInfo.until) {
@@ -151,7 +140,8 @@ app.get('/login', (req, res) => {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Giriş - Alzheimer ve Otizm Hastaları İçin Akıllı Ayakkabı Takip Sistemi</title>
+            <title>Giriş - Alzheimer ve Otizm Hastaları İçin Akıllı
+                       Ayakkabı Takip Sistemi</title>
             <style>
                 * {
                     margin: 0;
@@ -183,7 +173,7 @@ app.get('/login', (req, res) => {
                 h1 {
                     color: #333;
                     margin-bottom: 10px;
-                    font-size: 1.8em;
+                    font-size: 2em;
                 }
                 .subtitle {
                     color: #666;
@@ -250,7 +240,8 @@ app.get('/login', (req, res) => {
         <body>
             <div class="login-container">
                 <div class="logo">🔐</div>
-                <h1>Akıllı Ayakkabı Takip Sistemi</h1>
+                <h1>Alzheimer ve Otizm Hastaları İçin Akıllı
+                        Ayakkabı Takip Sistemi</h1>
                 <p class="subtitle">Güvenli Giriş</p>
                 
                 <div class="error-message" id="errorMsg"></div>
@@ -365,6 +356,50 @@ app.post('/api/logout', (req, res) => {
     res.json({ success: true, message: 'Çıkış yapıldı' });
 });
 
+/************ API: MANUEL IP BAN ************/
+app.post('/api/admin/ban-ip', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
+    }
+    
+    const { ip, duration } = req.body;
+    
+    if (!ip || !ip.trim()) {
+        return res.status(400).json({ success: false, message: 'IP adresi boş olamaz' });
+    }
+    
+    const banDuration = duration || 300000; // Varsayılan 5 dakika
+    const now = Date.now();
+    
+    bannedIPs.set(ip, {
+        until: now + banDuration,
+        bannedAt: now,
+        requestCount: 0,
+        manual: true
+    });
+    
+    console.log(`🚫 IP MANUEL BANLANDI: ${ip} (${banDuration / 1000} saniye)`);
+    
+    res.json({ success: true, message: 'IP başarıyla banlandı' });
+});
+
+/************ API: IP BAN KALDIR ************/
+app.post('/api/admin/unban-ip', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
+    }
+    
+    const { ip } = req.body;
+    
+    if (bannedIPs.has(ip)) {
+        bannedIPs.delete(ip);
+        console.log(`✅ IP BANI KALDIRILDI: ${ip}`);
+        res.json({ success: true, message: 'IP banı kaldırıldı' });
+    } else {
+        res.status(404).json({ success: false, message: 'IP banı bulunamadı' });
+    }
+});
+
 /************ ADMIN PANELİ ************/
 app.get('/admin', (req, res) => {
     if (!isAuthenticated(req)) {
@@ -375,26 +410,15 @@ app.get('/admin', (req, res) => {
         ip,
         until: new Date(info.until).toLocaleString('tr-TR'),
         remaining: Math.max(0, Math.ceil((info.until - Date.now()) / 1000)),
-        type: 'automatic'
+        manual: info.manual || false
     }));
     
-    // Manuel banlanan IP'leri ekle
-    manuallyBannedIPs.forEach(ip => {
-        bannedIPsList.push({
-            ip,
-            until: 'Kalıcı',
-            remaining: -1,
-            type: 'manual'
-        });
-    });
-    
-    // Ziyaretçi IP listesi
-    const visitorList = Array.from(visitorIPs.entries()).map(([ip, info]) => ({
+    const visitorIPsList = Array.from(visitorIPs.entries()).map(([ip, info]) => ({
         ip,
-        firstSeen: new Date(info.firstSeen).toLocaleString('tr-TR'),
-        lastSeen: new Date(info.lastSeen).toLocaleString('tr-TR'),
-        requestCount: info.requestCount,
-        isBanned: manuallyBannedIPs.has(ip) || bannedIPs.has(ip)
+        firstVisit: new Date(info.firstVisit).toLocaleString('tr-TR'),
+        lastVisit: new Date(info.lastVisit).toLocaleString('tr-TR'),
+        visitCount: info.visitCount,
+        isBanned: bannedIPs.has(ip)
     }));
     
     res.send(`
@@ -403,7 +427,7 @@ app.get('/admin', (req, res) => {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Admin Paneli</title>
+            <title>Admin Paneli - Deneyap Kart</title>
             <style>
                 * {
                     margin: 0;
@@ -417,7 +441,7 @@ app.get('/admin', (req, res) => {
                     padding: 20px;
                 }
                 .container {
-                    max-width: 1400px;
+                    max-width: 1200px;
                     margin: 0 auto;
                     background: white;
                     border-radius: 20px;
@@ -427,13 +451,17 @@ app.get('/admin', (req, res) => {
                 .header {
                     background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
                     color: white;
-                    padding: 30px;
+                    padding: 20px 30px;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                    flex-wrap: wrap;
+                    gap: 15px;
                 }
                 .header h1 {
-                    font-size: 2em;
+                    font-size: 1.8em;
+                    flex: 1;
+                    min-width: 200px;
                 }
                 .logout-btn {
                     background: rgba(255,255,255,0.2);
@@ -444,6 +472,7 @@ app.get('/admin', (req, res) => {
                     cursor: pointer;
                     font-weight: bold;
                     transition: all 0.3s ease;
+                    white-space: nowrap;
                 }
                 .logout-btn:hover {
                     background: white;
@@ -520,9 +549,11 @@ app.get('/admin', (req, res) => {
                     display: flex;
                     gap: 10px;
                     margin-top: 15px;
+                    flex-wrap: wrap;
                 }
                 .input-group input {
                     flex: 1;
+                    min-width: 200px;
                     padding: 12px;
                     border: 2px solid #e0e0e0;
                     border-radius: 8px;
@@ -568,29 +599,12 @@ app.get('/admin', (req, res) => {
                     transform: translateY(-2px);
                     box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
                 }
-                .btn-unban {
-                    background: #28a745;
-                    color: white;
-                    border: none;
-                    padding: 5px 12px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 0.85em;
-                }
-                .btn-unban:hover {
-                    background: #218838;
-                }
-                .btn-ban {
-                    background: #dc3545;
-                    color: white;
-                    border: none;
-                    padding: 5px 12px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 0.85em;
-                }
-                .btn-ban:hover {
-                    background: #c82333;
+                .banned-ip-item {
+                    background: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 10px;
+                    border-left: 4px solid #dc3545;
                 }
                 table {
                     width: 100%;
@@ -609,34 +623,118 @@ app.get('/admin', (req, res) => {
                     font-weight: bold;
                     color: #333;
                 }
-                tr.banned-row {
-                    background: #ffe0e0;
+                .btn-unban {
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 6px 15px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 0.9em;
                 }
-                .badge {
-                    display: inline-block;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 0.85em;
+                .btn-unban:hover {
+                    background: #218838;
+                }
+                .btn-ban {
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    padding: 6px 15px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 0.9em;
+                }
+                .btn-ban:hover {
+                    background: #c82333;
+                }
+                
+                /* Modal stilleri */
+                .modal {
+                    display: none;
+                    position: fixed;
+                    z-index: 1000;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0,0,0,0.5);
+                    animation: fadeIn 0.3s;
+                }
+                .modal-content {
+                    background-color: white;
+                    margin: 15% auto;
+                    padding: 30px;
+                    border-radius: 15px;
+                    width: 90%;
+                    max-width: 400px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    animation: slideIn 0.3s;
+                }
+                .modal-header {
+                    font-size: 1.5em;
                     font-weight: bold;
+                    margin-bottom: 15px;
+                    color: #333;
                 }
-                .badge-danger {
+                .modal-body {
+                    margin-bottom: 25px;
+                    color: #666;
+                    font-size: 1.1em;
+                }
+                .modal-buttons {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                }
+                .modal-btn {
+                    padding: 10px 25px;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    font-size: 1em;
+                    transition: all 0.3s ease;
+                }
+                .modal-btn-cancel {
+                    background: #6c757d;
+                    color: white;
+                }
+                .modal-btn-cancel:hover {
+                    background: #5a6268;
+                }
+                .modal-btn-confirm {
                     background: #dc3545;
                     color: white;
                 }
-                .badge-warning {
-                    background: #ffc107;
-                    color: #000;
+                .modal-btn-confirm:hover {
+                    background: #c82333;
                 }
-                .badge-success {
-                    background: #28a745;
-                    color: white;
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideIn {
+                    from { transform: translateY(-50px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                
+                @media (max-width: 768px) {
+                    .header h1 {
+                        font-size: 1.3em;
+                    }
+                    .content {
+                        padding: 20px;
+                    }
+                    table {
+                        font-size: 0.9em;
+                    }
                 }
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🔧 Admin Paneli</h1>
+                    <h1>🔧 Admin Paneli - Akıllı Ayakkabı Takip Sistemi</h1>
                     <button class="logout-btn" onclick="logout()">🚪 Çıkış Yap</button>
                 </div>
                 
@@ -651,47 +749,36 @@ app.get('/admin', (req, res) => {
                             <div class="stat-label">Aktif Şifre</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-value">${bannedIPsList.length}</div>
+                            <div class="stat-value">${bannedIPs.size}</div>
                             <div class="stat-label">Banlı IP</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-value">${visitorList.length}</div>
-                            <div class="stat-label">Toplam Ziyaretçi</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value">${activeSessions.size}</div>
-                            <div class="stat-label">Aktif Oturum</div>
+                            <div class="stat-value">${visitorIPs.size}</div>
+                            <div class="stat-label">Ziyaretçi IP</div>
                         </div>
                     </div>
                     
                     <div class="section">
-                        <h3>👥 Ziyaretçi IP Adresleri</h3>
-                        ${visitorList.length > 0 ? `
+                        <h3>🌐 IP İzleme ve Yönetim</h3>
+                        ${visitorIPsList.length > 0 ? `
                             <table>
                                 <tr>
                                     <th>IP Adresi</th>
-                                    <th>İlk Görülme</th>
-                                    <th>Son Görülme</th>
-                                    <th>İstek Sayısı</th>
-                                    <th>Durum</th>
+                                    <th>İlk Ziyaret</th>
+                                    <th>Son Ziyaret</th>
+                                    <th>Ziyaret Sayısı</th>
                                     <th>İşlem</th>
                                 </tr>
-                                ${visitorList.map(visitor => `
-                                    <tr class="${visitor.isBanned ? 'banned-row' : ''}">
-                                        <td><strong>${visitor.ip}</strong></td>
-                                        <td>${visitor.firstSeen}</td>
-                                        <td>${visitor.lastSeen}</td>
-                                        <td>${visitor.requestCount}</td>
+                                ${visitorIPsList.map(visitor => `
+                                    <tr style="${visitor.isBanned ? 'background: #ffe0e0;' : ''}">
+                                        <td>${visitor.ip} ${visitor.isBanned ? '🚫' : ''}</td>
+                                        <td>${visitor.firstVisit}</td>
+                                        <td>${visitor.lastVisit}</td>
+                                        <td>${visitor.visitCount}</td>
                                         <td>
                                             ${visitor.isBanned ? 
-                                                '<span class="badge badge-danger">Banlı</span>' : 
-                                                '<span class="badge badge-success">Aktif</span>'
-                                            }
-                                        </td>
-                                        <td>
-                                            ${!visitor.isBanned ? 
-                                                `<button class="btn-ban" onclick="banIP('${visitor.ip}')">🚫 Banla</button>` :
-                                                `<button class="btn-unban" onclick="unbanIP('${visitor.ip}')">✅ Ban Kaldır</button>`
+                                                `<button class="btn-unban" onclick="unbanIP('${visitor.ip}')">✅ Banı Kaldır</button>` :
+                                                `<button class="btn-ban" onclick="banIP('${visitor.ip}')">🚫 Banla</button>`
                                             }
                                         </td>
                                     </tr>
@@ -706,24 +793,19 @@ app.get('/admin', (req, res) => {
                             <table>
                                 <tr>
                                     <th>IP Adresi</th>
-                                    <th>Tip</th>
                                     <th>Ban Bitiş</th>
                                     <th>Kalan Süre</th>
+                                    <th>Tip</th>
                                     <th>İşlem</th>
                                 </tr>
                                 ${bannedIPsList.map(ban => `
                                     <tr>
-                                        <td><strong>${ban.ip}</strong></td>
-                                        <td>
-                                            ${ban.type === 'manual' ? 
-                                                '<span class="badge badge-danger">Manuel</span>' : 
-                                                '<span class="badge badge-warning">Otomatik</span>'
-                                            }
-                                        </td>
+                                        <td>${ban.ip}</td>
                                         <td>${ban.until}</td>
-                                        <td>${ban.remaining === -1 ? 'Kalıcı' : ban.remaining + ' saniye'}</td>
+                                        <td>${ban.remaining} saniye</td>
+                                        <td>${ban.manual ? '🔨 Manuel' : '🤖 Otomatik'}</td>
                                         <td>
-                                            <button class="btn-unban" onclick="unbanIP('${ban.ip}')">✅ Ban Kaldır</button>
+                                            <button class="btn-unban" onclick="unbanIP('${ban.ip}')">✅ Kaldır</button>
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -756,22 +838,92 @@ app.get('/admin', (req, res) => {
                 </div>
             </div>
             
+            <!-- Onay Modalı -->
+            <div id="confirmModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header" id="modalTitle">Onay</div>
+                    <div class="modal-body" id="modalMessage">İşlemi onaylıyor musunuz?</div>
+                    <div class="modal-buttons">
+                        <button class="modal-btn modal-btn-cancel" onclick="closeModal()">İptal</button>
+                        <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Onayla</button>
+                    </div>
+                </div>
+            </div>
+            
             <script>
                 const sessionId = '${req.query.session}';
                 
-                async function clearAllLocations() {
-                    if (!confirm('Tüm konum verilerini silmek istediğinizden emin misiniz?')) {
-                        return;
-                    }
+                // Modal fonksiyonları
+                function showModal(title, message, onConfirm) {
+                    document.getElementById('modalTitle').textContent = title;
+                    document.getElementById('modalMessage').textContent = message;
+                    document.getElementById('confirmModal').style.display = 'block';
                     
-                    const response = await fetch('/clear?session=' + sessionId, {
-                        method: 'DELETE'
+                    document.getElementById('modalConfirmBtn').onclick = function() {
+                        closeModal();
+                        onConfirm();
+                    };
+                }
+                
+                function closeModal() {
+                    document.getElementById('confirmModal').style.display = 'none';
+                }
+                
+                // Modal dışına tıklayınca kapat
+                window.onclick = function(event) {
+                    const modal = document.getElementById('confirmModal');
+                    if (event.target == modal) {
+                        closeModal();
+                    }
+                }
+                
+                async function banIP(ip) {
+                    const response = await fetch('/api/admin/ban-ip', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        },
+                        body: JSON.stringify({ ip, duration: 300000 })
                     });
                     
                     const result = await response.json();
                     if (result.success) {
                         location.reload();
                     }
+                }
+                
+                async function unbanIP(ip) {
+                    const response = await fetch('/api/admin/unban-ip', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        },
+                        body: JSON.stringify({ ip })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                        location.reload();
+                    }
+                }
+                
+                async function clearAllLocations() {
+                    showModal(
+                        '⚠️ Dikkat!',
+                        'Tüm konum verilerini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!',
+                        async function() {
+                            const response = await fetch('/clear?session=' + sessionId, {
+                                method: 'DELETE'
+                            });
+                            
+                            const result = await response.json();
+                            if (result.success) {
+                                location.reload();
+                            }
+                        }
+                    );
                 }
                 
                 async function addPassword() {
@@ -799,65 +951,27 @@ app.get('/admin', (req, res) => {
                 }
                 
                 async function removePassword(password) {
-                    if (!confirm('Bu şifreyi silmek istediğinizden emin misiniz?')) {
-                        return;
-                    }
-                    
-                    const response = await fetch('/api/admin/remove-password', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Session-Id': sessionId
-                        },
-                        body: JSON.stringify({ password })
-                    });
-                    
-                    const result = await response.json();
-                    if (result.success) {
-                        location.reload();
-                    } else {
-                        alert('❌ ' + result.message);
-                    }
-                }
-                
-                async function banIP(ip) {
-                    if (!confirm('Bu IP adresini kalıcı olarak banlamak istediğinizden emin misiniz?')) {
-                        return;
-                    }
-                    
-                    const response = await fetch('/api/admin/ban-ip', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Session-Id': sessionId
-                        },
-                        body: JSON.stringify({ ip })
-                    });
-                    
-                    const result = await response.json();
-                    if (result.success) {
-                        location.reload();
-                    } else {
-                        alert('❌ ' + result.message);
-                    }
-                }
-                
-                async function unbanIP(ip) {
-                    const response = await fetch('/api/admin/unban-ip', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Session-Id': sessionId
-                        },
-                        body: JSON.stringify({ ip })
-                    });
-                    
-                    const result = await response.json();
-                    if (result.success) {
-                        location.reload();
-                    } else {
-                        alert('❌ ' + result.message);
-                    }
+                    showModal(
+                        '🔑 Şifre Sil',
+                        'Bu şifreyi silmek istediğinizden emin misiniz?',
+                        async function() {
+                            const response = await fetch('/api/admin/remove-password', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-Session-Id': sessionId
+                                },
+                                body: JSON.stringify({ password })
+                            });
+                            
+                            const result = await response.json();
+                            if (result.success) {
+                                location.reload();
+                            } else {
+                                alert('❌ ' + result.message);
+                            }
+                        }
+                    );
                 }
                 
                 async function logout() {
@@ -874,47 +988,6 @@ app.get('/admin', (req, res) => {
         </body>
         </html>
     `);
-});
-
-/************ API: IP BAN ************/
-app.post('/api/admin/ban-ip', (req, res) => {
-    if (!isAuthenticated(req)) {
-        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
-    }
-    
-    const { ip } = req.body;
-    
-    if (!ip) {
-        return res.status(400).json({ success: false, message: 'IP adresi gerekli' });
-    }
-    
-    manuallyBannedIPs.add(ip);
-    console.log(`🚫 IP manuel olarak banlandı: ${ip}`);
-    
-    res.json({ success: true, message: 'IP başarıyla banlandı' });
-});
-
-/************ API: IP UNBAN ************/
-app.post('/api/admin/unban-ip', (req, res) => {
-    if (!isAuthenticated(req)) {
-        return res.status(401).json({ success: false, message: 'Yetkisiz erişim' });
-    }
-    
-    const { ip } = req.body;
-    
-    if (!ip) {
-        return res.status(400).json({ success: false, message: 'IP adresi gerekli' });
-    }
-    
-    // Manuel ban'ı kaldır
-    manuallyBannedIPs.delete(ip);
-    
-    // Otomatik ban'ı kaldır
-    bannedIPs.delete(ip);
-    
-    console.log(`✅ IP ban'ı kaldırıldı: ${ip}`);
-    
-    res.json({ success: true, message: 'IP ban\'ı başarıyla kaldırıldı' });
 });
 
 /************ API: ŞİFRE EKLE ************/
@@ -976,7 +1049,8 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Akıllı Ayakkabı Takip Sistemi</title>
+            <title>Alzheimer ve Otizm Hastaları İçin Akıllı
+                      Ayakkabı Takip Sistemi</title>
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
@@ -1002,7 +1076,7 @@ app.get('/', (req, res) => {
                 .header {
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
-                    padding: 30px;
+                    padding: 20px 30px;
                     text-align: center;
                     position: relative;
                 }
@@ -1010,7 +1084,7 @@ app.get('/', (req, res) => {
                     font-size: 2em;
                     margin-bottom: 10px;
                     text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-                    padding-right: 100px;
+                    padding-right: 120px;
                 }
                 .header p {
                     font-size: 1.1em;
@@ -1018,8 +1092,8 @@ app.get('/', (req, res) => {
                 }
                 .logout-btn-header {
                     position: absolute;
-                    top: 30px;
-                    right: 30px;
+                    top: 20px;
+                    right: 20px;
                     background: rgba(255,255,255,0.2);
                     color: white;
                     border: 2px solid white;
@@ -1133,31 +1207,15 @@ app.get('/', (req, res) => {
                     animation: pulse 2s infinite;
                 }
                 
-                /* Popup sürüklenebilir yapma */
-                .leaflet-popup {
-                    cursor: move;
-                }
-                
-                .leaflet-popup-content-wrapper {
-                    border-radius: 12px;
-                    box-shadow: 0 3px 14px rgba(0,0,0,0.4);
-                }
-                
-                .popup-btn {
-                    width: 100%;
-                    padding: 8px;
-                    background: #dc3545;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-weight: bold;
-                    font-size: 0.9em;
-                    transition: background 0.3s;
-                }
-                
-                .popup-btn:hover {
-                    background: #c82333;
+                @media (max-width: 768px) {
+                    .header h1 {
+                        font-size: 1.3em;
+                        padding-right: 100px;
+                    }
+                    .logout-btn-header {
+                        padding: 8px 15px;
+                        font-size: 0.9em;
+                    }
                 }
             </style>
         </head>
@@ -1165,7 +1223,8 @@ app.get('/', (req, res) => {
             <div class="container">
                 <div class="header">
                     <button class="logout-btn-header" onclick="logout()">🚪 Çıkış</button>
-                    <h1>Alzheimer ve Otizm Hastaları İçin<br>Akıllı Ayakkabı Takip Sistemi</h1>
+                    <h1>Alzheimer ve Otizm Hastaları İçin Akıllı
+                        Ayakkabı Takip Sistemi</h1>
                     <p><span class="live-indicator"></span>Gerçek Zamanlı Konum İzleme</p>
                 </div>
                 
@@ -1232,15 +1291,13 @@ app.get('/', (req, res) => {
                     
                     if (locations.length > 0) {
                         locations.forEach((loc, index) => {
-                            const marker = L.marker([loc.lat, loc.lng], {
-                                draggable: false
-                            }).addTo(map);
+                            const marker = L.marker([loc.lat, loc.lng]).addTo(map);
                             markers.push(marker);
                             
                             const wearingColor = loc.wearing ? '#28a745' : '#dc3545';
                             const wearingText = loc.wearing ? '✅ Giyildi' : '❌ Giyilmedi';
                             
-                            const popupContent = \`
+                            marker.bindPopup(\`
                                 <div style="min-width: 220px;">
                                     <b style="color: \${index === locations.length - 1 ? '#dc3545' : '#667eea'}; font-size: 1.1em;">
                                         \${index === locations.length - 1 ? '🔴 Son Konum' : '📍 Konum ' + (index + 1)}
@@ -1262,18 +1319,24 @@ app.get('/', (req, res) => {
                                         <strong>🕐 Zaman:</strong> \${loc.timestamp}
                                     </div>
                                     <hr style="margin: 8px 0; border-color: #ddd;">
-                                    <button class="popup-btn" onclick="deleteLocation(\${index})">
+                                    <button 
+                                        onclick="deleteLocation(\${index})" 
+                                        style="
+                                            width: 100%;
+                                            padding: 8px;
+                                            background: #dc3545;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 5px;
+                                            cursor: pointer;
+                                            font-weight: bold;
+                                            font-size: 0.9em;
+                                        "
+                                    >
                                         ❌ Bu Konumu Sil
                                     </button>
                                 </div>
-                            \`;
-                            
-                            const popup = L.popup({
-                                maxWidth: 300,
-                                className: 'custom-popup'
-                            }).setContent(popupContent);
-                            
-                            marker.bindPopup(popup);
+                            \`);
                             
                             if (index === locations.length - 1) {
                                 marker.openPopup();
@@ -1422,9 +1485,8 @@ app.get('/health', (req, res) => {
     res.json({ 
         status: 'OK', 
         timestamp: new Date().toISOString(),
-        bannedIPs: bannedIPs.size + manuallyBannedIPs.size,
-        activeSessions: activeSessions.size,
-        visitors: visitorIPs.size
+        bannedIPs: bannedIPs.size,
+        activeSessions: activeSessions.size
     });
 });
 
