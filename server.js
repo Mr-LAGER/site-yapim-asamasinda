@@ -131,17 +131,24 @@ function isAuthenticated(req) {
 
 /************ KONUM VERİLERİ ************/
 let locationData = [];
-
-/************ GİRİŞ SAYFASI ************/
-app.get('/login', (req, res) => {
+/************ ANA SAYFA ************/
+app.get('/', (req, res) => {
+    if (!isAuthenticated(req)) {
+        return res.redirect('/login');
+    }
+    
+    const lastLocation = locationData.length > 0 ? locationData[locationData.length - 1] : null;
+    
     res.send(`
         <!DOCTYPE html>
         <html lang="tr">
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Giriş - Alzheimer ve Otizm Hastaları İçin Akıllı
-                       Ayakkabı Takip Sistemi</title>
+            <title>Alzheimer ve Otizm Hastaları İçin Akıllı
+                      Ayakkabı Takip Sistemi</title>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
                 * {
                     margin: 0;
@@ -152,168 +159,370 @@ app.get('/login', (req, res) => {
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     min-height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
                     padding: 20px;
                 }
-                .login-container {
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
                     background: white;
                     border-radius: 20px;
                     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                    padding: 50px;
-                    max-width: 450px;
-                    width: 100%;
+                    overflow: hidden;
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px 30px;
                     text-align: center;
+                    position: relative;
                 }
-                .logo {
-                    font-size: 4em;
-                    margin-bottom: 20px;
-                }
-                h1 {
-                    color: #333;
-                    margin-bottom: 10px;
+                .header h1 {
                     font-size: 2em;
+                    margin-bottom: 10px;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+                    padding-right: 120px;
                 }
-                .subtitle {
-                    color: #666;
-                    margin-bottom: 40px;
+                .header p {
                     font-size: 1.1em;
+                    opacity: 0.9;
                 }
-                .input-group {
-                    margin-bottom: 25px;
-                    text-align: left;
-                }
-                label {
-                    display: block;
-                    color: #555;
-                    margin-bottom: 8px;
-                    font-weight: 500;
-                }
-                input[type="password"] {
-                    width: 100%;
-                    padding: 15px;
-                    border: 2px solid #e0e0e0;
-                    border-radius: 10px;
-                    font-size: 1.1em;
+                .logout-btn-header {
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                    background: rgba(255,255,255,0.2);
+                    color: white;
+                    border: 2px solid white;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
                     transition: all 0.3s ease;
                 }
-                input[type="password"]:focus {
-                    outline: none;
-                    border-color: #667eea;
-                    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+                .logout-btn-header:hover {
+                    background: white;
+                    color: #667eea;
                 }
-                .btn-login {
+                .stats {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 20px;
+                    padding: 30px;
+                    background: #f8f9fa;
+                }
+                .stat-card {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 15px;
+                    text-align: center;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease;
+                }
+                .stat-card:hover {
+                    transform: translateY(-5px);
+                }
+                .stat-value {
+                    font-size: 2em;
+                    font-weight: bold;
+                    color: #667eea;
+                    margin-bottom: 5px;
+                }
+                .stat-label {
+                    color: #6c757d;
+                    font-size: 0.9em;
+                }
+                #map {
                     width: 100%;
+                    height: 500px;
+                    border-top: 3px solid #667eea;
+                    border-bottom: 3px solid #667eea;
+                }
+                .location-list {
+                    padding: 30px;
+                    max-height: 400px;
+                    overflow-y: auto;
+                }
+                .location-item {
+                    background: #f8f9fa;
                     padding: 15px;
+                    margin-bottom: 10px;
+                    border-radius: 10px;
+                    border-left: 4px solid #667eea;
+                    transition: all 0.3s ease;
+                }
+                .location-item:hover {
+                    background: #e9ecef;
+                    transform: translateX(5px);
+                }
+                .location-coords {
+                    font-size: 1.1em;
+                    font-weight: bold;
+                    color: #333;
+                    margin-bottom: 5px;
+                }
+                .location-time {
+                    color: #6c757d;
+                    font-size: 0.9em;
+                }
+                .no-data {
+                    text-align: center;
+                    padding: 40px;
+                    color: #6c757d;
+                    font-style: italic;
+                }
+                .refresh-btn {
+                    position: fixed;
+                    bottom: 30px;
+                    right: 30px;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
                     border: none;
-                    border-radius: 10px;
-                    font-size: 1.2em;
-                    font-weight: bold;
+                    padding: 15px 30px;
+                    border-radius: 50px;
+                    font-size: 1em;
                     cursor: pointer;
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
                     transition: all 0.3s ease;
+                    z-index: 1000;
                 }
-                .btn-login:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+                .refresh-btn:hover {
+                    transform: translateY(-3px);
+                    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
                 }
-                .error-message {
-                    background: #fee;
-                    color: #c33;
-                    padding: 12px;
-                    border-radius: 8px;
-                    margin-bottom: 20px;
-                    display: none;
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
                 }
-                .info-box {
-                    background: #f0f4ff;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin-top: 25px;
-                    color: #555;
-                    font-size: 0.9em;
+                .live-indicator {
+                    display: inline-block;
+                    width: 10px;
+                    height: 10px;
+                    background: #28a745;
+                    border-radius: 50%;
+                    margin-right: 8px;
+                    animation: pulse 2s infinite;
+                }
+                
+                @media (max-width: 768px) {
+                    .header h1 {
+                        font-size: 1.3em;
+                        padding-right: 100px;
+                    }
+                    .logout-btn-header {
+                        padding: 8px 15px;
+                        font-size: 0.9em;
+                    }
                 }
             </style>
         </head>
         <body>
-            <div class="login-container">
-                <div class="logo">🔐</div>
-                <h1>Alzheimer ve Otizm Hastaları İçin Akıllı
+            <div class="container">
+                <div class="header">
+                    <button class="logout-btn-header" onclick="logout()">🚪 Çıkış</button>
+                    <h1>Alzheimer ve Otizm Hastaları İçin Akıllı
                         Ayakkabı Takip Sistemi</h1>
-                <p class="subtitle">Güvenli Giriş</p>
+                    <p><span class="live-indicator"></span>Gerçek Zamanlı Konum İzleme</p>
+                </div>
                 
-                <div class="error-message" id="errorMsg"></div>
-                
-                <form id="loginForm">
-                    <div class="input-group">
-                        <label>Erişim Şifresi</label>
-                        <input type="password" id="password" placeholder="Şifrenizi girin" required autofocus>
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value">${locationData.length}</div>
+                        <div class="stat-label">Toplam Konum Verisi</div>
                     </div>
-                    
-                    <button type="submit" class="btn-login">🚀 Giriş Yap</button>
-                </form>
+                    <div class="stat-card">
+                        <div class="stat-value">${lastLocation ? lastLocation.lat.toFixed(6) : '-'}</div>
+                        <div class="stat-label">Son Enlem</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${lastLocation ? lastLocation.lng.toFixed(6) : '-'}</div>
+                        <div class="stat-label">Son Boylam</div>
+                    </div>
+                    <div class="stat-card" style="background: ${lastLocation && lastLocation.wearing ? 'linear-gradient(135deg, #28a745 0%, #218838 100%)' : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'}; color: white;">
+                        <div class="stat-value" style="color: white;">${lastLocation ? (lastLocation.wearing ? '✅' : '❌') : '-'}</div>
+                        <div class="stat-label" style="color: white;">Giyilme Durumu</div>
+                    </div>
+                </div>
                 
-                <div class="info-box">
-                    🛡️ Bu sistem DDoS korumalıdır<br>
-                    ⚡ Saniyede 100+ istek = 5 dakika ban
+                <div id="map"></div>
+                
+                <div class="location-list">
+                    <h2 style="margin-bottom: 20px; color: #333;">📋 Son Konumlar</h2>
+                    ${locationData.length > 0 ? 
+                        locationData.slice(-10).reverse().map((loc, index) => `
+                            <div class="location-item">
+                                <div class="location-coords">
+                                    📌 Enlem: ${loc.lat.toFixed(6)} | Boylam: ${loc.lng.toFixed(6)}
+                                </div>
+                                <div class="location-time">
+                                    🕐 ${loc.timestamp} | 
+                                    <span style="color: ${loc.wearing ? '#28a745' : '#dc3545'}; font-weight: bold;">
+                                        ${loc.wearing ? '✅ Giyildi' : '❌ Giyilmedi'}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('') 
+                        : '<div class="no-data">Henüz konum verisi alınmadı. Deneyap Kart\'ı başlatın...</div>'
+                    }
                 </div>
             </div>
             
+            <button class="refresh-btn" onclick="location.reload()">🔄 Yenile</button>
+            
             <script>
-                document.getElementById('loginForm').addEventListener('submit', async (e) => {
-                    e.preventDefault();
+                const sessionId = '${req.query.session}';
+                
+                // Harita başlatma
+                console.log('Harita başlatılıyor...');
+                
+                // Varsayılan merkez (Türkiye - Ankara)
+                const defaultCenter = [39.9334, 32.8597];
+                const defaultZoom = 6;
+                
+                // Eğer konum varsa onu kullan
+                const lastLat = ${lastLocation ? lastLocation.lat : 'null'};
+                const lastLng = ${lastLocation ? lastLocation.lng : 'null'};
+                
+                const mapCenter = (lastLat !== null && lastLng !== null) ? [lastLat, lastLng] : defaultCenter;
+                const mapZoom = (lastLat !== null && lastLng !== null) ? 13 : defaultZoom;
+                
+                console.log('Harita merkezi:', mapCenter);
+                console.log('Zoom seviyesi:', mapZoom);
+                
+                // Haritayı oluştur
+                const map = L.map('map').setView(mapCenter, mapZoom);
+                
+                // Tile layer ekle
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(map);
+                
+                console.log('Harita tile layer eklendi');
+                
+                // Konumları al
+                const locations = ${JSON.stringify(locationData)};
+                console.log('Toplam konum sayısı:', locations.length);
+                
+                let markers = [];
+                
+                function drawMarkers() {
+                    // Eski marker'ları temizle
+                    markers.forEach(marker => map.removeLayer(marker));
+                    markers = [];
                     
-                    const password = document.getElementById('password').value;
-                    const errorMsg = document.getElementById('errorMsg');
-                    
-                    // Admin kontrolü - büyük/küçük harf duyarsız
-                    if (password.toLowerCase() === 'admin') {
-                        try {
-                            const response = await fetch('/api/login', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ password: '251900' }) // İlk geçerli şifre ile session oluştur
-                            });
+                    if (locations.length > 0) {
+                        console.log('Marker\'lar çiziliyor...');
+                        
+                        locations.forEach((loc, index) => {
+                            const marker = L.marker([loc.lat, loc.lng]).addTo(map);
+                            markers.push(marker);
                             
-                            const result = await response.json();
+                            const wearingColor = loc.wearing ? '#28a745' : '#dc3545';
+                            const wearingText = loc.wearing ? '✅ Giyildi' : '❌ Giyilmedi';
+                            const isLast = index === locations.length - 1;
                             
-                            if (result.success) {
-                                localStorage.setItem('sessionId', result.sessionId);
-                                window.location.href = '/admin?session=' + result.sessionId;
+                            const popupContent = \`
+                                <div style="min-width: 220px;">
+                                    <b style="color: \${isLast ? '#dc3545' : '#667eea'}; font-size: 1.1em;">
+                                        \${isLast ? '🔴 Son Konum' : '📍 Konum ' + (index + 1)}
+                                    </b>
+                                    <hr style="margin: 8px 0; border-color: #ddd;">
+                                    <div style="margin: 5px 0;">
+                                        <strong>📍 Enlem:</strong> \${loc.lat.toFixed(6)}
+                                    </div>
+                                    <div style="margin: 5px 0;">
+                                        <strong>📍 Boylam:</strong> \${loc.lng.toFixed(6)}
+                                    </div>
+                                    <div style="margin: 5px 0;">
+                                        <strong>👕 Durum:</strong> 
+                                        <span style="color: \${wearingColor}; font-weight: bold;">
+                                            \${wearingText}
+                                        </span>
+                                    </div>
+                                    <div style="margin: 5px 0; color: #666;">
+                                        <strong>🕐 Zaman:</strong> \${loc.timestamp}
+                                    </div>
+                                    <hr style="margin: 8px 0; border-color: #ddd;">
+                                    <button 
+                                        onclick="deleteLocation(\${index})" 
+                                        style="
+                                            width: 100%;
+                                            padding: 8px;
+                                            background: #dc3545;
+                                            color: white;
+                                            border: none;
+                                            border-radius: 5px;
+                                            cursor: pointer;
+                                            font-weight: bold;
+                                            font-size: 0.9em;
+                                        "
+                                    >
+                                        ❌ Bu Konumu Sil
+                                    </button>
+                                </div>
+                            \`;
+                            
+                            marker.bindPopup(popupContent);
+                            
+                            // Son konumu otomatik aç
+                            if (isLast) {
+                                marker.openPopup();
                             }
-                        } catch (error) {
-                            errorMsg.textContent = '❌ Bağlantı hatası';
-                            errorMsg.style.display = 'block';
-                        }
-                        return;
-                    }
-                    
-                    try {
-                        const response = await fetch('/api/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password })
                         });
                         
+                        console.log('Toplam marker sayısı:', markers.length);
+                        
+                        // Eğer birden fazla konum varsa, haritayı tüm konumları gösterecek şekilde ayarla
+                        if (locations.length > 1) {
+                            const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lng]));
+                            map.fitBounds(bounds, { padding: [50, 50] });
+                            console.log('Harita sınırları ayarlandı');
+                        }
+                    } else {
+                        console.log('Henüz konum verisi yok');
+                    }
+                }
+                
+                // Marker'ları çiz
+                drawMarkers();
+                
+                // Harita yüklendikten sonra boyutları düzelt
+                setTimeout(() => {
+                    map.invalidateSize();
+                    console.log('Harita boyutu güncellendi');
+                }, 100);
+                
+                async function deleteLocation(index) {
+                    try {
+                        const response = await fetch('/delete-location/' + index + '?session=' + sessionId, {
+                            method: 'DELETE'
+                        });
                         const result = await response.json();
                         
                         if (result.success) {
-                            // Session ID'yi kaydet
-                            localStorage.setItem('sessionId', result.sessionId);
-                            // Ana sayfaya yönlendir
-                            window.location.href = '/?session=' + result.sessionId;
+                            console.log('Konum silindi, sayfa yenileniyor...');
+                            setTimeout(() => location.reload(), 500);
                         } else {
-                            errorMsg.textContent = '❌ ' + result.message;
-                            errorMsg.style.display = 'block';
-                            document.getElementById('password').value = '';
+                            console.error('Silme hatası:', result.message);
                         }
                     } catch (error) {
-                        errorMsg.textContent = '❌ Bağlantı hatası';
-                        errorMsg.style.display = 'block';
+                        console.error('Silme isteği hatası:', error);
                     }
-                });
+                }
+                
+                async function logout() {
+                    await fetch('/api/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Id': sessionId
+                        }
+                    });
+                    window.location.href = '/login';
+                }
+                
+                // 30 saniyede bir sayfayı yenile
+                setTimeout(() => location.reload(), 30000);
             </script>
         </body>
         </html>
