@@ -225,7 +225,7 @@ app.get('/login', (req, res) => {
         </head>
         <body>
             <div class="login-container">
-                <div class="logo">🔐</div>
+                <div class="logo"></div>
                 <h1>Alzheimer ve Otizm Hastaları İçin Akıllı
                         Ayakkabı Takip Sistemi</h1>
                 <p class="subtitle">Güvenli Giriş</p>
@@ -242,8 +242,7 @@ app.get('/login', (req, res) => {
                 </form>
                 
                 <div class="info-box">
-                    🛡️ Bu sistem DDoS korumalıdır<br>
-                    ⚡ Saniyede 100+ istek = 5 dakika ban
+                    
                 </div>
             </div>
             
@@ -649,11 +648,11 @@ app.get('/admin', (req, res) => {
                     </div>
                     
                     <div class="section">
-                        <h3>🔑 Şifre Yönetimi</h3>
+                        <h3>Şifre Yönetimi</h3>
                         <div class="password-list" id="passwordList">
                             ${validPasswords.map(pwd => `
                                 <div class="password-item">
-                                    <span class="password-text">🔐 ${pwd}</span>
+                                    <span class="password-text">${pwd}</span>
                                     <button class="btn-remove" onclick="removePassword('${pwd}')">❌</button>
                                 </div>
                             `).join('')}
@@ -681,7 +680,7 @@ app.get('/admin', (req, res) => {
                                     </tr>
                                 `).join('')}
                             </table>
-                        ` : '<p>🎉 Banlı IP adresi yok</p>'}
+                        ` : '<p> Banlı IP adresi yok</p>'}
                     </div>
                     
                     <div class="section">
@@ -777,7 +776,7 @@ app.get('/admin', (req, res) => {
                 
                 async function removePassword(password) {
                     showModal(
-                        '🔑 Şifre Sil',
+                        ' Şifre Sil',
                         'Bu şifreyi silmek istediğinizden emin misiniz?',
                         async function() {
                             const response = await fetch('/api/admin/remove-password', {
@@ -1219,17 +1218,17 @@ app.get('/', (req, res) => {
                             marker.bindPopup(\`
                                 <div style="min-width: 220px;">
                                     <b style="color: \${index === locations.length - 1 ? '#dc3545' : '#667eea'}; font-size: 1.1em;">
-                                        \${index === locations.length - 1 ? '🔴 Son Konum' : '📍 Konum ' + (index + 1)}
+                                        \${index === locations.length - 1 ? ' Son Konum' : ' Konum ' + (index + 1)}
                                     </b>
                                     <hr style="margin: 8px 0; border-color: #ddd;">
                                     <div style="margin: 5px 0;">
-                                        <strong>📍 Enlem:</strong> \${loc.lat.toFixed(6)}
+                                        <strong> Enlem:</strong> \${loc.lat.toFixed(6)}
                                     </div>
                                     <div style="margin: 5px 0;">
-                                        <strong>📍 Boylam:</strong> \${loc.lng.toFixed(6)}
+                                        <strong> Boylam:</strong> \${loc.lng.toFixed(6)}
                                     </div>
                                     <div style="margin: 5px 0;">
-                                        <strong>👕 Durum:</strong> 
+                                        <strong> Durum:</strong> 
                                         <span style="color: \${wearingColor}; font-weight: bold;">
                                             \${wearingText}
                                         </span>
@@ -1430,9 +1429,9 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('╠════════════════════════════════════════╣');
     console.log(`║  📡 Server: http://0.0.0.0:${PORT.toString().padEnd(19)}║`);
     console.log('║  🔐 Giriş: /login                     ║');
-    console.log('║  🛡️  DDoS Koruması: Aktif             ║');
-    console.log('║  ⚡ Rate Limit: 100 istek/saniye      ║');
-    console.log('║  ⏰ Ban Süresi: 5 dakika              ║');
+    console.log('║                                        ║');
+    console.log('║                                        ║');
+    console.log('║                                        ║');
     console.log('╚════════════════════════════════════════╝');
     console.log('');
     console.log('🔑 Varsayılan Şifreler:');
